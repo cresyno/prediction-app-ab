@@ -9,13 +9,12 @@ def run_automated():
     # 1. Load the latest data and fit the model
     models = fa.build_all(force=True) 
     if not models:
-        print("Failed to build models. Exiting.")
         return
 
-    # 2. Load upcoming fixtures
+    # 2. Load upcoming fixtures from the API
     fx = fa.load_fixtures(force=True)
     if fx is None or len(fx) == 0:
-        print("No upcoming fixtures found from the data source.")
+        print("No upcoming fixtures found.")
         return
 
     # 3. Generate predictions
@@ -32,7 +31,6 @@ def run_automated():
         items.append(a)
 
     if not items:
-        print("No fixtures could be predicted (teams not in model).")
         return
 
     # 4. Save to predictions.json
