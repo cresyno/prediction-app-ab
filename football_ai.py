@@ -4,8 +4,8 @@ import pandas as pd
 from scipy.optimize import minimize
 from scipy.stats import poisson
 
-LEAGUES = {"E0": "Premier League", "E1": "Championship", "SP1": "La Liga", "SP2": "Segunda Division", "I1": "Serie A", "D1": "Bundesliga", "F1": "Ligue 1", "N1": "Eredivisie", "P1": "Primeira Liga"}
-ACTIVE = ["E0", "E1", "SP1", "SP2", "I1", "D1", "F1", "N1", "P1"]
+LEAGUES = {"E0": "Premier League", "E1": "Championship", "SP1": "La Liga", "I1": "Serie A", "D1": "Bundesliga", "F1": "Ligue 1", "N1": "Eredivisie", "P1": "Primeira Liga"}
+ACTIVE = ["E0", "E1", "SP1", "I1", "D1", "F1", "N1", "P1"]
 SEASONS_BACK = 4; XI = 0.0019; SHRINK = 2.0; MAX_GOALS = 10
 XG_WEIGHT = 0.5; CONVERSION_RATE = 0.33
 FOOTBALL_DATA_API_KEY = "2a67295f23384b56829c9b228e10b369"
