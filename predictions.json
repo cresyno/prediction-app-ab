@@ -1,0 +1,17 @@
+{
+ "generated": "2024-05-20T10:00:00",
+ "matches": [
+  {
+   "league": "Premier League",
+   "date": "2024-05-21",
+   "time": "20:00",
+   "home": "Arsenal",
+   "away": "Chelsea",
+   "markets": {
+    "Arsenal goals": { "Over 0.5": 0.94 },
+    "Chelsea goals": { "Over 0.5": 0.88 },
+    "Total goals": { "Over 1.5": 0.85 }
+   }
+  }
+ ]
+}
