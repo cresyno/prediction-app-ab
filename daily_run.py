@@ -12,7 +12,7 @@ def find_best_match(api_name, model_teams):
     clean_name = clean_name.strip()
     if clean_name in model_teams: return clean_name
     
-    # 3. Manual overrides for tricky cases
+    # 3. Manual overrides
     overrides = {
         "Manchester City": "Man City", "Manchester United": "Man United",
         "Nottingham Forest": "Nott'm Forest", "Wolverhampton Wanderers": "Wolves",
@@ -45,7 +45,7 @@ def find_best_match(api_name, model_teams):
         "Ipswich Town": "Ipswich", "Sunderland": "Sunderland", "Levante UD": "Levante",
         "Real Racing Club de Santander": "Santander", "Málaga": "Malaga",
         "RC Deportivo La Coruña": "La Coruna", "RCD Espanyol de Barcelona": "Espanyol",
-        "Getafe CF": "Getafe", "PSV": "PSV", "AFC Ajax": "Ajax",
+        "Getafe CF": "Getafe", "PSV": "PSV Eindhoven", "AFC Ajax": "Ajax",
         "Feyenoord Rotterdam": "Feyenoord", "AZ": "AZ Alkmaar",
         "FC Twente '65": "Twente", "FC Utrecht": "Utrecht", "SC Heerenveen": "Heerenveen",
         "Sparta Rotterdam": "Sparta Rotterdam", "Go Ahead Eagles": "Go Ahead Eagles",
@@ -61,10 +61,12 @@ def find_best_match(api_name, model_teams):
         "FC Famalicão": "Famalicao"
     }
     
-    if api_name in overrides: return overrides[api_name]
-    if clean_name in overrides: return overrides[clean_name]
-    
-    # 4. Fuzzy fallback
+    # 4. Check overrides safely
+    target = overrides.get(api_name) or overrides.get(clean_name)
+    if target and target in model_teams: 
+        return target
+            
+    # 5. Fuzzy fallback
     matches = difflib.get_close_matches(clean_name, model_teams, n=1, cutoff=0.6)
     if matches: return matches[0]
     
@@ -87,15 +89,19 @@ def run_automated():
         h_team = find_best_match(r["HomeTeam"], model_teams)
         a_team = find_best_match(r["AwayTeam"], model_teams)
         
+        # Safety check: Do not proceed if no match was found
         if not h_team or not a_team:
             print(f"Skipping {r['HomeTeam']} vs {r['AwayTeam']}: No match found.")
             continue
             
-        a = fa.analyse(m, h_team, a_team)
-        a["league"] = fa.LEAGUES.get(r["Div"], r["Div"])
-        a["date"] = r["Date"].strftime("%Y-%m-%d")
-        a["time"] = r["Time"]
-        items.append(a)
+        try:
+            a = fa.analyse(m, h_team, a_team)
+            a["league"] = fa.LEAGUES.get(r["Div"], r["Div"])
+            a["date"] = r["Date"].strftime("%Y-%m-%d")
+            a["time"] = r["Time"]
+            items.append(a)
+        except Exception as e:
+            print(f"Error calculating {h_team} vs {a_team}: {e}")
 
     print(f"Successfully generated predictions for {len(items)} matches.")
     if not items: return
