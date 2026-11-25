@@ -1,6 +1,5 @@
 """
-FOOTBALL AI - script 1: multi-league Dixon-Coles goals engine
-Free data from football-data.co.uk. Needs: numpy, pandas, scipy.
+FOOTBALL AI - script 1: multi-league Dixon-Coles goals engine with xG & API
 """
 import os
 import io
@@ -28,10 +27,32 @@ SEASONS_BACK = 4         # seasons of history to learn from
 XI = 0.0019              # time decay per day (half-life ~ 1 year)
 SHRINK = 2.0             # pulls teams with few games towards average
 MAX_GOALS = 10
+
+# --- xG SETTINGS ---
+XG_WEIGHT = 0.5          # How much we trust xG vs actual goals (0.5 = 50/50)
+CONVERSION_RATE = 0.33   # 1 shot on target is roughly 0.33 goals
+
+# --- API SETTINGS ---
+FOOTBALL_DATA_API_KEY = "2a67295f23384b56829c9b228e10b369"
+
+# Name translation: API name -> CSV name
+NAME_MAP = {
+    "Arsenal FC": "Arsenal", "Aston Villa FC": "Aston Villa", "AFC Bournemouth": "Bournemouth",
+    "Brentford FC": "Brentford", "Brighton & Hove Albion FC": "Brighton", "Chelsea FC": "Chelsea",
+    "Crystal Palace FC": "Crystal Palace", "Everton FC": "Everton", "Fulham FC": "Fulham",
+    "Liverpool FC": "Liverpool", "Manchester City FC": "Man City", "Manchester United FC": "Man United",
+    "Newcastle United FC": "Newcastle", "Nottingham Forest FC": "Nott'm Forest", "Tottenham Hotspur FC": "Spurs",
+    "West Ham United FC": "West Ham", "Wolverhampton Wanderers FC": "Wolves", "Luton Town FC": "Luton",
+    "Burnley FC": "Burnley", "Sheffield United FC": "Sheff United",
+    "Real Madrid CF": "Real Madrid", "FC Barcelona": "Barcelona", "Club Atlético de Madrid": "Ath Madrid",
+    "Sevilla FC": "Sevilla", "Real Betis Balompié": "Betis", "Real Sociedad de Fútbol": "Sociedad",
+    "Villarreal CF": "Villarreal", "Valencia CF": "Valencia", "Athletic Club": "Ath Bilbao",
+    "Girona FC": "Girona", "Getafe CF": "Getafe", "CA Osasuna": "Osasuna", "RC Celta de Vigo": "Celta",
+    "RCD Mallorca": "Mallorca", "UD Las Palmas": "Las Palmas", "Rayo Vallecano": "Vallecano", "Deportivo Alavés": "Alaves"
+}
 # ------------------------------------------------------------
 
 BASE_URL = "https://www.football-data.co.uk/mmz4281/{s}/{c}.csv"
-FIXT_URL = "https://www.football-data.co.uk/fixtures.csv"
 try:
     HERE = os.path.dirname(os.path.abspath(__file__))
 except NameError:
@@ -89,19 +110,28 @@ def season_codes():
 def load_results(code, force=False):
     frames = []
     seasons = season_codes()
-    need = ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"]
+    need = ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "HST", "AST"]
     for i, s in enumerate(seasons):
         age = 6 if i == 0 else None      # only the current season refreshes
         raw = get(BASE_URL.format(s=s, c=code), "%s_%s.csv" % (code, s), age, force)
         if raw is None:
             continue
         df = parse_csv(raw)
+        
         if not all(c in df.columns for c in need):
-            continue
+            if all(c in df.columns for c in ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"]):
+                df["HST"] = df["FTHG"]
+                df["AST"] = df["FTAG"]
+            else:
+                continue
+                
         df = df[need].copy()
         df["Date"] = parse_dates(df["Date"])
         df["FTHG"] = pd.to_numeric(df["FTHG"], errors="coerce")
         df["FTAG"] = pd.to_numeric(df["FTAG"], errors="coerce")
+        df["HST"] = pd.to_numeric(df["HST"], errors="coerce").fillna(df["FTHG"])
+        df["AST"] = pd.to_numeric(df["AST"], errors="coerce").fillna(df["FTAG"])
+        
         df = df.dropna()
         frames.append(df)
     if not frames:
@@ -113,19 +143,46 @@ def load_results(code, force=False):
 
 
 def load_fixtures(force=False):
-    raw = get(FIXT_URL, "fixtures.csv", 6, force)
-    if raw is None:
+    """Fetches upcoming fixtures from football-data.org API."""
+    api_codes = {"E0": "PL", "SP1": "PD", "I1": "SA", "D1": "BL1", "F1": "FL1", "E1": "ELC"}
+    today_str = TODAY.strftime('%Y-%m-%d')
+    end_date_str = (TODAY + pd.Timedelta(days=7)).strftime('%Y-%m-%d')
+    all_matches = []
+    
+    for league_code in ACTIVE:
+        comp_code = api_codes.get(league_code)
+        if not comp_code: continue
+            
+        url = f"https://api.football-data.org/v4/competitions/{comp_code}/matches?dateFrom={today_str}&dateTo={end_date_str}&status=SCHEDULED"
+        req = urllib.request.Request(url, headers={'X-Auth-Token': FOOTBALL_DATA_API_KEY})
+        
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                data = json.loads(response.read().decode())
+                
+            for m in data.get('matches', []):
+                match_date = pd.to_datetime(m['utcDate']).tz_convert('UTC').tz_localize(None)
+                match_time = match_date.strftime('%H:%M')
+                
+                # Translate API names to CSV names so the model recognizes them
+                h_name = m['homeTeam']['name']
+                a_name = m['awayTeam']['name']
+                h_name = NAME_MAP.get(h_name, h_name.replace(" FC", "").replace(" AFC", "").replace(" CF", ""))
+                a_name = NAME_MAP.get(a_name, a_name.replace(" FC", "").replace(" AFC", "").replace(" CF", ""))
+                
+                all_matches.append({
+                    "Div": league_code, "Date": match_date, "Time": match_time,
+                    "HomeTeam": h_name, "AwayTeam": a_name,
+                })
+        except Exception as e:
+            print(f"  Error fetching {comp_code} from API: {e}")
+            continue
+
+    if not all_matches:
         return None
-    df = parse_csv(raw)
-    if not all(c in df.columns for c in ["Div", "Date", "HomeTeam", "AwayTeam"]):
-        return None
-    if "Time" not in df.columns:
-        df["Time"] = ""
-    df["Time"] = df["Time"].fillna("").astype(str)
-    df = df[df["Div"].isin(ACTIVE)].copy()
-    df["Date"] = parse_dates(df["Date"])
-    df = df.dropna(subset=["Date", "HomeTeam", "AwayTeam"])
-    df = df[df["Date"] >= TODAY]
+
+    df = pd.DataFrame(all_matches)
+    df["Date"] = pd.to_datetime(df["Date"])
     return df.sort_values(["Date", "Time"]).reset_index(drop=True)
 
 
@@ -136,10 +193,18 @@ def fit_league(df):
     n = len(teams)
     hi = df.HomeTeam.map(idx).to_numpy()
     ai = df.AwayTeam.map(idx).to_numpy()
+    
     x = df.FTHG.to_numpy()
     y = df.FTAG.to_numpy()
+    
+    xg_h = df.HST.to_numpy() * CONVERSION_RATE
+    xg_a = df.AST.to_numpy() * CONVERSION_RATE
+    y_h = (x * (1 - XG_WEIGHT)) + (xg_h * XG_WEIGHT)
+    y_a = (y * (1 - XG_WEIGHT)) + (xg_a * XG_WEIGHT)
+    
     days = (TODAY - df.Date).dt.days.to_numpy()
     w = np.exp(-XI * np.clip(days, 0, None))
+    
     m00 = (x == 0) & (y == 0)
     m01 = (x == 0) & (y == 1)
     m10 = (x == 1) & (y == 0)
@@ -149,29 +214,34 @@ def fit_league(df):
         att = p[:n] - p[:n].mean()
         dfn = p[n:2 * n] - p[n:2 * n].mean()   # defence "weakness"
         c0, gam, rho = p[2 * n], p[2 * n + 1], p[2 * n + 2]
+        
         lam = np.exp(c0 + att[hi] + dfn[ai] + gam)
         mu = np.exp(c0 + att[ai] + dfn[hi])
+        
         tau = np.ones_like(lam)
         tau[m00] = 1 - lam[m00] * mu[m00] * rho
         tau[m01] = 1 + lam[m01] * rho
         tau[m10] = 1 + mu[m10] * rho
         tau[m11] = 1 - rho
-        ll = x * np.log(lam) - lam + y * np.log(mu) - mu + np.log(np.maximum(tau, 1e-9))
+        
+        ll = y_h * np.log(lam) - lam + y_a * np.log(mu) - mu + np.log(np.maximum(tau, 1e-9))
         return -(w * ll).sum() + SHRINK * ((att ** 2).sum() + (dfn ** 2).sum())
 
     x0 = np.zeros(2 * n + 3)
-    x0[2 * n] = 0.2        # base scoring level
-    x0[2 * n + 1] = 0.25   # home advantage
-    x0[2 * n + 2] = -0.05  # low-score correction
+    x0[2 * n] = 0.2        
+    x0[2 * n + 1] = 0.25   
+    x0[2 * n + 2] = -0.05  
     bounds = [(-3, 3)] * (2 * n) + [(-1, 1.5), (-1, 1), (-0.3, 0.3)]
     res = minimize(nll, x0, method="L-BFGS-B", bounds=bounds, options={"maxiter": 500})
     p = res.x
+    
     s_year = TODAY.year if TODAY.month >= 7 else TODAY.year - 1
     cur = df[df.Date >= pd.Timestamp(s_year, 7, 1)]
     current = sorted(set(cur.HomeTeam) | set(cur.AwayTeam))
-    if len(current) < 12:      # season barely started: use the last 400 days
+    if len(current) < 12:      
         rec = df[(TODAY - df.Date).dt.days < 400]
         current = sorted(set(rec.HomeTeam) | set(rec.AwayTeam))
+        
     return {
         "teams": teams, "idx": idx, "current": current,
         "att": p[:n] - p[:n].mean(), "dfn": p[n:2 * n] - p[n:2 * n].mean(),
@@ -193,7 +263,7 @@ def score_matrix(lam, mu, rho):
     P[0, 1] *= 1 + lam * rho
     P[1, 0] *= 1 + mu * rho
     P[1, 1] *= 1 - rho
-    return P / P.sum()          # rows = home goals, columns = away goals
+    return P / P.sum()          
 
 
 # ----------------------- MARKETS -----------------------
@@ -208,9 +278,6 @@ def analyse(model, home, away):
 
     S = {}
     S["Result (1X2)"] = {home + " win": pH, "Draw": pD, away + " win": pA}
-    S["Double chance"] = {home + " or draw": pH + pD, away + " or draw": pA + pD,
-                          "Either team wins": pH + pA}
-    S["Draw no bet"] = {home: pH / (pH + pA), away: pA / (pH + pA)}
     tg = {}
     for line in (0.5, 1.5, 2.5, 3.5, 4.5):
         tg["Over %.1f" % line] = P[tot > line].sum()
@@ -218,17 +285,7 @@ def analyse(model, home, away):
     S["Total goals"] = tg
     S[home + " goals"] = {"Over %.1f" % (k + 0.5): dh[k + 1:].sum() for k in range(3)}
     S[away + " goals"] = {"Over %.1f" % (k + 0.5): da[k + 1:].sum() for k in range(3)}
-    S["Both teams to score"] = {"Yes": P[(H > 0) & (A > 0)].sum(),
-                                "No": P[(H == 0) | (A == 0)].sum()}
-    S["Handicap " + home + " -1"] = {home + " (-1)": P[margin >= 2].sum(),
-                                     "Draw": P[margin == 1].sum(),
-                                     away + " (+1)": P[margin <= 0].sum()}
-    S["Handicap " + away + " -1"] = {home + " (+1)": P[margin >= 0].sum(),
-                                     "Draw": P[margin == -1].sum(),
-                                     away + " (-1)": P[margin <= -2].sum()}
-    flat = sorted(((P[i, j], "%d-%d" % (i, j)) for i in range(6) for j in range(6)),
-                  reverse=True)[:5]
-    S["Correct score (top 5)"] = {lab: p for p, lab in flat}
+    
     S = {t: {l: float(v) for l, v in d.items()} for t, d in S.items()}
     return {"home": home, "away": away, "xg_h": lam, "xg_a": mu, "sections": S,
             "dist_h": dh, "dist_a": da}
@@ -245,28 +302,14 @@ def show(a, league=""):
         print("\n" + title.upper())
         for label, p in items.items():
             print("%-21s%5.1f%%  %5.2f" % (label[:21], p * 100, 1 / max(p, 1e-4)))
-    for name, dist in ((h, a["dist_h"]), (w, a["dist_a"])):
-        k = int(np.argmax(dist))
-        print("\n%s SCORES" % name.upper())
-        print("0: %.0f%%  1: %.0f%%  2: %.0f%%  3+: %.0f%%" %
-              (dist[0] * 100, dist[1] * 100, dist[2] * 100, dist[3:].sum() * 100))
-        if k == 0:
-            print("Most likely: 0 goals (%.0f%%)" % (dist[0] * 100))
-        else:
-            print("Most likely: %d goal%s (%.0f%%)" % (k, "" if k == 1 else "s", dist[k] * 100))
-            print("Safer: Over %.1f (%.0f%%)" % (k - 0.5, dist[k:].sum() * 100))
-    print("\nColumns: probability, fair odds (1/prob).")
-    print("If SportyBet pays MORE than fair odds it may be value.")
-    print("NOT BACKTESTED YET - treat as an estimate.")
 
 
 def short_line(a):
     s = a["sections"]
     r = s["Result (1X2)"]
     one = list(r.values())
-    return "  1/X/2 %.0f/%.0f/%.0f  O2.5 %.0f  BTTS %.0f" % (
-        one[0] * 100, one[1] * 100, one[2] * 100,
-        s["Total goals"]["Over 2.5"] * 100, s["Both teams to score"]["Yes"] * 100)
+    return "  1/X/2 %.0f/%.0f/%.0f  O2.5 %.0f" % (
+        one[0] * 100, one[1] * 100, one[2] * 100, s["Total goals"]["Over 2.5"] * 100)
 
 
 # ----------------------- INTERFACE -----------------------
@@ -300,8 +343,7 @@ def pick_number(prompt, lo, hi):
 def fixtures_menu(models, force=False):
     fx = load_fixtures(force)
     if fx is None or len(fx) == 0:
-        print("\nNo upcoming fixtures found (or download failed).")
-        print("Use option 2 to pick a match yourself.")
+        print("\nNo upcoming fixtures found from the API.")
         return
     items, skipped = [], 0
     for _, r in fx.iterrows():
@@ -314,15 +356,19 @@ def fixtures_menu(models, force=False):
         a["date"] = r["Date"].strftime("%Y-%m-%d")
         a["time"] = r["Time"]
         items.append(a)
+    
     if not items:
-        print("\nNo fixtures could be predicted.")
+        print("\nNo fixtures could be predicted (teams not in historical data).")
         return
+        
     print("\nUPCOMING (%d matches)" % len(items))
     for n, a in enumerate(items, 1):
         print("%2d. %s %s  %s v %s" % (n, a["date"][5:], a["time"], a["home"][:12], a["away"][:12]))
         print(short_line(a))
+        
     if skipped:
-        print("(%d fixtures skipped: team not in data)" % skipped)
+        print("(%d fixtures skipped: team not in model data)" % skipped)
+        
     out = {"generated": dt.datetime.now().isoformat(timespec="seconds"), "matches": []}
     for a in items:
         out["matches"].append({
@@ -334,7 +380,8 @@ def fixtures_menu(models, force=False):
         })
     with open(os.path.join(HERE, "predictions.json"), "w") as f:
         json.dump(out, f, indent=1)
-    print("\nSaved predictions.json (for the Vercel page later).")
+    print("\nSaved predictions.json (for the Vercel page).")
+    
     while True:
         k = pick_number("\nMatch number for full detail (Enter = back): ", 1, len(items))
         if k is None:
@@ -383,7 +430,7 @@ def ratings_menu(models):
 
 
 def main():
-    print("FOOTBALL AI - script 1")
+    print("FOOTBALL AI - script 1 (xG Engine + API)")
     print("First run downloads data and fits the model. Please wait...")
     models = build_all()
     if not models:
