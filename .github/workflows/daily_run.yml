@@ -2,9 +2,8 @@ name: Update Football Predictions
 
 on:
   schedule:
-    # Runs at 06:00 UTC every day (Adjust to your timezone)
-    - cron: '0 6 * * *'
-  workflow_dispatch: # Allows you to click a button to run it manually
+    - cron: '0 */2 * * *' # Runs every 2 hours automatically
+  workflow_dispatch: # Lets you click a button to test it manually
 
 permissions:
   contents: write
