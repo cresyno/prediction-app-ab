@@ -1,9 +1,8 @@
 name: Update Football Predictions
-
 on:
   schedule:
-    - cron: '0 */2 * * *' # Runs every 2 hours automatically
-  workflow_dispatch: # Lets you click a button to test it manually
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,24 +13,20 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
       - name: Run prediction script
         run: python daily_run.py
-
       - name: Commit and push changes
         run: |
           git config --global user.name "GitHub Action Bot"
           git config --global user.email "actions@github.com"
-          git add predictions.json
-          git commit -m "Automated update of predictions.json" || echo "No changes to commit"
+          git add .
+          git commit -m "Automated update of predictions" || echo "No changes to commit"
           git push
