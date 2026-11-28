@@ -12,17 +12,10 @@
         }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 50px; }
         
-        /* HEADER & SNIPER MODE */
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header { margin-bottom: 24px; }
         .header h1 { font-size: 1.4rem; margin: 0; color: var(--text); font-weight: 800; }
         .header p { font-size: 0.75rem; color: var(--muted); margin: 4px 0 0 0; }
         
-        .sniper-toggle { display: flex; align-items: center; gap: 8px; background: var(--panel); padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border); cursor: pointer; }
-        .sniper-toggle.active { border-color: var(--success); background: rgba(16, 185, 129, 0.1); }
-        .sniper-toggle span { font-size: 0.8rem; font-weight: bold; color: var(--muted); }
-        .sniper-toggle.active span { color: var(--success); }
-        
-        /* HIERARCHY (Dates & Leagues) */
         .date-group { margin-bottom: 30px; }
         .date-title { font-size: 1.1rem; font-weight: bold; color: var(--accent); border-bottom: 2px solid var(--accent); padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; }
         
@@ -30,7 +23,6 @@
         .league-title { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; padding-left: 4px; display: flex; align-items: center; gap: 6px; }
         .league-title::before { content: ''; display: inline-block; width: 8px; height: 8px; background: var(--accent); border-radius: 50%; }
 
-        /* MATCH CARD */
         .match-card { background: var(--card); border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--border); overflow: hidden; transition: all 0.2s; }
         .match-card.value-found { border-color: var(--success); box-shadow: 0 0 10px rgba(16, 185, 129, 0.2); }
         
@@ -43,7 +35,6 @@
         .xg-row { display: flex; justify-content: space-between; background: var(--panel); padding: 8px; border-radius: 8px; font-size: 0.8rem; color: var(--muted); margin-bottom: 12px; text-align: center; }
         .xg-val { font-size: 1rem; font-weight: bold; color: var(--text); display: block; margin-top: 2px; }
         
-        /* PRIMARY PICK */
         .primary-pick { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center; }
         .pick-info { display: flex; flex-direction: column; }
         .pick-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -57,7 +48,6 @@
         .val-good { background: rgba(16, 185, 129, 0.2); color: var(--success); }
         .val-bad { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
 
-        /* EXPANDED DETAILS */
         .details { display: none; padding: 16px; border-top: 1px solid var(--border); background: #151c2c; }
         .match-card.expanded .details { display: block; }
         
@@ -72,27 +62,17 @@
         .market-name { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
         .market-prob { font-size: 1rem; font-weight: bold; margin-bottom: 8px; }
         .market-prob.high { color: var(--success); }
-        
-        .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div class="header">
-        <div>
-            <h1>⚡ Command Center</h1>
-            <p id="update-time">Syncing...</p>
-        </div>
-        <div class="sniper-toggle" id="sniperBtn" onclick="toggleSniper()">
-            <span>🛡️ SNIPER</span>
-            <span id="sniper-status">OFF</span>
-        </div>
+        <h1>⚡ Command Center</h1>
+        <p id="update-time">Syncing...</p>
     </div>
     <div id="app"></div>
 
     <script>
         let allMatches = [];
-        let sniperMode = false;
-        const SNIPER_THRESHOLD = 0.70; // 70%
 
         fetch('predictions.json').then(r => r.json()).then(data => {
             document.getElementById('update-time').innerText = `Updated: ${data.generated.replace('T', ' ')}`;
@@ -102,37 +82,27 @@
             document.getElementById('app').innerHTML = '<div style="text-align:center; padding:20px;">⚠️ Error loading predictions.</div>';
         });
 
-        function toggleSniper() {
-            sniperMode = !sniperMode;
-            const btn = document.getElementById('sniperBtn');
-            const status = document.getElementById('sniper-status');
-            if (sniperMode) {
-                btn.classList.add('active');
-                status.innerText = 'ON';
-            } else {
-                btn.classList.remove('active');
-                status.innerText = 'OFF';
-            }
-            render();
-        }
-
+        // NEW LOGIC: BAN OVER 0.5 AND UNDER MARKETS
         function getPrimaryPick(match) {
-            // Finds the highest goal probability in the match
             let best = { name: '', prob: 0, cat: '' };
             const targets = ['Total Goals', 'Team Goals', 'BTTS'];
             
             targets.forEach(cat => {
                 if (match.markets[cat]) {
                     for (const [name, prob] of Object.entries(match.markets[cat])) {
-                        // We only care about Over/Yes markets for the primary pick
-                        if (name.includes('Over') || name.includes('Yes')) {
-                            if (prob > best.prob) {
-                                best = { name: name, prob: prob, cat: cat };
-                            }
+                        // Ban Over 0.5, Under markets, and No (BTTS)
+                        if (name.includes('Over 0.5') || name.includes('Under') || name.includes('No')) continue;
+
+                        // Only look for realistic goal bets
+                        if (prob > best.prob) {
+                            best = { name: name, prob: prob, cat: cat };
                         }
                     }
                 }
             });
+            
+            // If no realistic goal market is found, return empty
+            if (best.prob === 0) return { name: 'No Goal Value', prob: 0, cat: '' };
             return best;
         }
 
@@ -140,7 +110,6 @@
             const app = document.getElementById('app');
             app.innerHTML = '';
 
-            // 1. Group matches by Date
             const grouped = {};
             allMatches.forEach(m => {
                 if (!grouped[m.date]) grouped[m.date] = [];
@@ -149,13 +118,10 @@
 
             const sortedDates = Object.keys(grouped).sort();
 
-            let hasRendered = false;
-
             sortedDates.forEach(date => {
                 const dateDiv = document.createElement('div');
                 dateDiv.className = 'date-group';
                 
-                // Format Date Title (Today / Tomorrow / Date)
                 const today = new Date().toISOString().split('T')[0];
                 const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
                 let dateLabel = date;
@@ -168,7 +134,6 @@
 
                 let dateHTML = `<div class="date-title">${dateLabel}</div>`;
 
-                // 2. Group by League within this date
                 const leaguesInDate = {};
                 grouped[date].forEach(m => {
                     if (!leaguesInDate[m.league]) leaguesInDate[m.league] = [];
@@ -183,11 +148,8 @@
                     
                     leaguesInDate[league].forEach(match => {
                         const topPick = getPrimaryPick(match);
-                        
-                        // SNIPER FILTER LOGIC
-                        if (sniperMode && topPick.prob < SNIPER_THRESHOLD) return;
-
-                        hasRendered = true;
+                        // Only show matches that actually have a goal market left
+                        if (topPick.prob === 0) return; 
                         matchesHTML += buildCardHTML(match, topPick);
                     });
 
@@ -206,14 +168,9 @@
                     app.appendChild(dateDiv);
                 }
             });
-
-            if (!hasRendered) {
-                app.innerHTML = '<div style="text-align:center; padding: 40px 20px; color: var(--muted);"><h3>No matches meet the strict criteria.</h3><p>Protect your bankroll today.</p></div>';
-            }
         }
 
         function buildCardHTML(match, topPick) {
-            // Deep stats formatting
             const fh = match.form_home || { fts: 0, cs: 0, btts: 0 };
             const fa = match.form_away || { fts: 0, cs: 0, btts: 0 };
             
@@ -234,7 +191,6 @@
                 </div>
             `;
 
-            // Build full goal market grid for expanded view
             let marketsHTML = '';
             const buildGrid = (catName) => {
                 if (!match.markets[catName]) return '';
@@ -242,9 +198,13 @@
                 for (const [name, prob] of Object.entries(match.markets[catName])) {
                     const probPct = (prob * 100).toFixed(1);
                     const probClass = prob >= 0.75 ? 'high' : '';
+                    // Gray out the 0.5 and Under markets in the detailed view so user knows to ignore them
+                    const isTrap = name.includes('Over 0.5') || name.includes('Under') || name.includes('No');
+                    const trapStyle = isTrap ? 'opacity: 0.4;' : '';
+
                     html += `
-                        <div class="market-item">
-                            <div class="market-name">${name}</div>
+                        <div class="market-item" style="${trapStyle}">
+                            <div class="market-name">${name} ${isTrap ? '(Trap)' : ''}</div>
                             <div class="market-prob ${probClass}">${probPct}%</div>
                         </div>
                     `;
@@ -256,12 +216,11 @@
             marketsHTML += buildGrid('Team Goals');
             marketsHTML += buildGrid('BTTS');
 
-            // Determine color for top pick
             const pickColorClass = topPick.prob >= 0.75 ? 'high' : '';
 
             return `
-                <div class="match-card" id="card-${match.home.replace(/\\s/g, '')}-${match.away.replace(/\\s/g, '')}">
-                    <div class="card-main" onclick="toggleCard(this)">
+                <div class="match-card">
+                    <div class="card-main" onclick="this.parentElement.classList.toggle('expanded')">
                         <div class="teams-row">
                             <div class="team-name">${match.home}</div>
                             <div class="vs">VS</div>
@@ -275,7 +234,7 @@
                         
                         <div class="primary-pick">
                             <div class="pick-info">
-                                <span class="pick-label">Top Goal Market</span>
+                                <span class="pick-label">Best Real Goal Market</span>
                                 <span class="pick-name">${topPick.name}</span>
                                 <span class="pick-prob ${pickColorClass}">${(topPick.prob * 100).toFixed(1)}% Probability</span>
                             </div>
@@ -291,10 +250,6 @@
                     </div>
                 </div>
             `;
-        }
-
-        function toggleCard(element) {
-            element.parentElement.classList.toggle('expanded');
         }
 
         function checkValue(input, prob, cardElement) {
