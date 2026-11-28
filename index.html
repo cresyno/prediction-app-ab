@@ -1,279 +1,745 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Command Center</title>
-    <style>
-        :root {
-            --bg: #0b0f19; --panel: #111827; --card: #1f2937; 
-            --text: #f3f4f6; --muted: #9ca3af;
-            --accent: #3b82f6; --success: #10b981; --danger: #ef4444; --border: #374151;
-        }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 50px; }
-        
-        .header { margin-bottom: 24px; }
-        .header h1 { font-size: 1.4rem; margin: 0; color: var(--text); font-weight: 800; }
-        .header p { font-size: 0.75rem; color: var(--muted); margin: 4px 0 0 0; }
-        
-        .date-group { margin-bottom: 30px; }
-        .date-title { font-size: 1.1rem; font-weight: bold; color: var(--accent); border-bottom: 2px solid var(--accent); padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; }
-        
-        .league-group { margin-bottom: 20px; }
-        .league-title { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; padding-left: 4px; display: flex; align-items: center; gap: 6px; }
-        .league-title::before { content: ''; display: inline-block; width: 8px; height: 8px; background: var(--accent); border-radius: 50%; }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Football AI</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: one narrow column like a matchday feed. Match cards in a list, one match per screen on tap.
+   Ink-and-paper neutrals tinted toward pitch green. Blue = home, orange = away, grey = draw. Data is the only loud colour. */
+:root{
+  --bg:#F2F5F1; --surface:#FFFFFF; --surface-2:#E8EDE8; --ink:#14211B; --ink-2:#53655B; --line:#D5DDD6;
+  --home:#257DE0; --draw:#9AA59F; --away:#F47230;
+  --good:#006C10; --good-bg:#DCF0E1; --warn:#6F4700; --warn-bg:#FBEBC8;
+  --focus:#1757AC;
+  --font-ui:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-num:"Barlow Semi Condensed","Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1612; --surface:#14211C; --surface-2:#1C2E27; --ink:#EAF1EC; --ink-2:#9DB2A6; --line:#26392F;
+    --home:#338CED; --draw:#6F8077; --away:#E76624;
+    --good:#53C556; --good-bg:#16301D; --warn:#F0C36B; --warn-bg:#3A2E10;
+    --focus:#84B9F3; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1612; --surface:#14211C; --surface-2:#1C2E27; --ink:#EAF1EC; --ink-2:#9DB2A6; --line:#26392F;
+  --home:#338CED; --draw:#6F8077; --away:#E76624;
+  --good:#53C556; --good-bg:#16301D; --warn:#F0C36B; --warn-bg:#3A2E10;
+  --focus:#84B9F3; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 var(--font-ui);min-height:100vh}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+button,input,textarea{font:inherit;color:inherit}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:6px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.page{max-width:680px;margin-inline:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 
-        .match-card { background: var(--card); border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--border); overflow: hidden; transition: all 0.2s; }
-        .match-card.value-found { border-color: var(--success); box-shadow: 0 0 10px rgba(16, 185, 129, 0.2); }
-        
-        .card-main { padding: 16px; cursor: pointer; }
-        .teams-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .team-name { font-size: 1.05rem; font-weight: bold; flex: 1; }
-        .team-name.away { text-align: right; }
-        .vs { font-size: 0.8rem; color: var(--muted); padding: 0 10px; font-weight: bold; }
-        
-        .xg-row { display: flex; justify-content: space-between; background: var(--panel); padding: 8px; border-radius: 8px; font-size: 0.8rem; color: var(--muted); margin-bottom: 12px; text-align: center; }
-        .xg-val { font-size: 1rem; font-weight: bold; color: var(--text); display: block; margin-top: 2px; }
-        
-        .primary-pick { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center; }
-        .pick-info { display: flex; flex-direction: column; }
-        .pick-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-        .pick-name { font-size: 0.95rem; font-weight: bold; color: var(--accent); margin-top: 2px; }
-        .pick-prob { font-size: 1.1rem; font-weight: 900; color: var(--text); margin-top: 4px; }
-        
-        .odds-input-box { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-        .odds-input-box input { width: 70px; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: white; font-size: 1rem; text-align: center; font-weight: bold; }
-        .val-badge { font-size: 0.65rem; padding: 4px 6px; border-radius: 4px; font-weight: bold; text-align: center; width: 100%; display: none; }
-        .val-badge.show { display: block; }
-        .val-good { background: rgba(16, 185, 129, 0.2); color: var(--success); }
-        .val-bad { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
+.top .page{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:54px}
+.brand{display:flex;align-items:center;gap:8px;font:700 23px/1 var(--font-num);letter-spacing:.01em;text-decoration:none}
+.brand svg{flex:none}
+.nav{display:flex;gap:2px}
+.nav button{min-height:44px;padding:0 9px;background:none;border:0;border-radius:10px;font-weight:500;color:var(--ink-2);cursor:pointer}
+.nav button[aria-pressed="true"]{color:var(--ink);background:var(--surface-2)}
 
-        .details { display: none; padding: 16px; border-top: 1px solid var(--border); background: #151c2c; }
-        .match-card.expanded .details { display: block; }
-        
-        .deep-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; background: var(--panel); padding: 12px; border-radius: 8px; }
-        .stat-col { display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem; }
-        .stat-row { display: flex; justify-content: space-between; color: var(--muted); }
-        .stat-row span:last-child { color: var(--text); font-weight: bold; }
+/* status + filters */
+.status{margin:14px 0 4px}
+.line{margin:0;color:var(--ink-2);font-size:14px}
+.banner{margin:10px 0 0;padding:11px 13px;border-radius:10px;font-size:14px;background:var(--warn-bg);color:var(--warn)}
+.banner p{margin:0 0 8px}
+.banner b{font-weight:600}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:500;cursor:pointer;text-decoration:none}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 6px;margin-top:6px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;min-height:40px;padding:0 15px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-weight:500;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 
-        .section-title { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; margin: 16px 0 8px 0; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-        .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .market-item { background: var(--card); padding: 10px; border-radius: 8px; display: flex; flex-direction: column; }
-        .market-name { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
-        .market-prob { font-size: 1rem; font-weight: bold; margin-bottom: 8px; }
-        .market-prob.high { color: var(--success); }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>⚡ Command Center</h1>
-        <p id="update-time">Syncing...</p>
-    </div>
-    <div id="app"></div>
+/* match cards */
+.day{margin:24px 0 8px;font:600 13px/1 var(--font-num);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+.day b{color:var(--ink);font-weight:700}
+.card{display:block;margin:0 0 10px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);text-decoration:none}
+.card:active{background:var(--surface-2)}
+.meta{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px;font-size:13px;color:var(--ink-2)}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 0}
+.tn{display:flex;align-items:center;gap:9px;min-width:0}
+.tname{font:600 22px/1.15 var(--font-num);overflow-wrap:anywhere}
+.tpct{font:600 30px/1 var(--font-num);flex:none}
+.tpct small,.r-p small{font-size:.6em;font-weight:500;margin-left:1px;color:var(--ink-2)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--draw)}
+.dot.h{background:var(--home)} .dot.a{background:var(--away)}
+.bar{display:flex;gap:2px;height:8px;margin:12px 0 8px}
+.bar i{display:block;height:100%;min-width:3px;border-radius:4px;background:var(--draw)}
+.bar i.h{background:var(--home)} .bar i.a{background:var(--away)}
+.sub{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--ink-2)}
+.sub .d{display:inline-flex;align-items:center;gap:6px}
+.scores{margin:8px 0 0;font-size:13px;color:var(--ink-2)}
+.scores b{color:var(--ink);font-weight:600}
+.empty{padding:28px 0;color:var(--ink-2)}
 
-    <script>
-        let allMatches = [];
+/* panels */
+.panel{margin:14px 0;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.panel h2{margin:0 0 10px;font:700 22px/1.1 var(--font-num)}
+.panel h3{margin:18px 0 6px;font:600 16px/1.2 var(--font-num);letter-spacing:.02em}
+.panel p{margin:0 0 10px;color:var(--ink-2)}
+.panel .acts{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 6px}
+.panel label.l{display:block;margin:14px 0 6px;font-weight:500}
+.panel textarea,.panel input[type=url]{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:16px}
+.panel textarea{min-height:92px;resize:vertical;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+.msg{min-height:1.4em;margin:10px 0 0;font-weight:500}
+.msg.err{color:var(--warn)}
+.trust{list-style:none;margin:0;padding:0}
+.trust li{padding:10px 0;border-top:1px solid var(--line)}
+.trust li:first-child{border-top:0}
+.trust .h{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:2px}
+.trust p{margin:0;font-size:14px}
+.facts{margin:0;padding-left:18px;color:var(--ink-2);font-size:14px}
+.facts li{margin:4px 0}
 
-        fetch('predictions.json').then(r => r.json()).then(data => {
-            document.getElementById('update-time').innerText = `Updated: ${data.generated.replace('T', ' ')}`;
-            allMatches = data.matches || [];
-            render();
-        }).catch(e => {
-            document.getElementById('app').innerHTML = '<div style="text-align:center; padding:20px;">⚠️ Error loading predictions.</div>';
-        });
+/* detail */
+.back{display:inline-flex;align-items:center;gap:6px;min-height:44px;margin-top:6px;color:var(--ink-2);font-weight:500;text-decoration:none}
+.kick{margin:2px 0 6px;font-size:14px;color:var(--ink-2)}
+h1.dt{margin:0 0 8px;font:700 36px/1.05 var(--font-num)}
+h1.dt .tn{display:flex;padding:2px 0}
+h1.dt .dot{width:12px;height:12px}
+.xg{margin:0 0 4px;color:var(--ink-2);font-size:14px}
+.xg b{color:var(--ink);font-weight:600}
+.howto{margin:12px 0 0;padding:11px 13px;border-radius:10px;background:var(--surface-2);font-size:14px;color:var(--ink-2)}
+.howto b{color:var(--ink);font-weight:600}
+.scoring{display:grid;grid-template-columns:1fr;gap:10px;margin:14px 0 4px}
+@media (min-width:560px){.scoring{grid-template-columns:1fr 1fr}}
+.tcard{padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.tcard h3{display:flex;align-items:center;gap:9px;margin:0 0 10px;font:600 18px/1.15 var(--font-num)}
+.cols{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;align-items:end;height:92px}
+.col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:3px}
+.cb{width:24px;border-radius:4px 4px 0 0;background:var(--draw);min-height:2px}
+.col.top .cb{background:var(--home)}
+.tcard.away .col.top .cb{background:var(--away)}
+.axis{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;border-top:1px solid var(--line);padding-top:5px;text-align:center;font-size:13px;color:var(--ink-2)}
+.axis b{display:block;color:var(--ink);font-weight:600;font-family:var(--font-num);font-size:15px}
+.tcard p{margin:10px 0 0;font-size:14px;color:var(--ink-2)}
+.tcard p b{color:var(--ink);font-weight:600}
+.sec{margin:10px 0;border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}
+.sec>summary{display:flex;align-items:center;gap:10px;min-height:54px;padding:8px 16px;cursor:pointer;list-style:none}
+.sec>summary::-webkit-details-marker{display:none}
+.sec>summary::after{content:"";width:8px;height:8px;margin-left:2px;border-right:2px solid var(--ink-2);border-bottom:2px solid var(--ink-2);transform:rotate(45deg) translateY(-2px);flex:none}
+.sec[open]>summary::after{transform:rotate(-135deg) translateY(-2px)}
+.s-title{flex:1;min-width:0;font:600 19px/1.15 var(--font-num);overflow-wrap:anywhere}
+.badge{flex:none;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;letter-spacing:.02em;background:var(--surface-2)}
+.badge.best{color:var(--good);background:var(--good-bg)}
+.badge.weak{color:var(--warn);background:var(--warn-bg)}
+.badge.untested{background:none;border:1px solid var(--line);color:var(--ink-2)}
+.s-note{margin:0;padding:0 16px 8px;font-size:13px;color:var(--ink-2)}
+.rows{list-style:none;margin:0;padding:0 16px 6px}
+.row{padding:12px 0;border-top:1px solid var(--line)}
+.r-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.r-label{min-width:0;font-weight:500;overflow-wrap:anywhere}
+.r-p{flex:none;font:600 24px/1 var(--font-num)}
+.meter{height:4px;margin:8px 0 9px;border-radius:2px;background:var(--surface-2)}
+.meter i{display:block;height:100%;border-radius:2px;background:var(--ink-2)}
+.meter i.h{background:var(--home)} .meter i.a{background:var(--away)} .meter i.d{background:var(--draw)}
+.r-bot{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
+.fair{font-size:14px;color:var(--ink-2)}
+.fair b{color:var(--ink);font-weight:600}
+.odds{width:104px;min-height:40px;padding:0 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:16px}
+.res{padding:4px 10px;border-radius:999px;font-size:13px;font-weight:600;background:var(--surface-2);color:var(--ink-2)}
+.res.up{background:var(--warn-bg);color:var(--warn)}
+.r-note{margin:7px 0 0;font-size:13px;color:var(--ink-2)}
+.foot{margin:28px 0 34px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-2)}
+.foot p{margin:0 0 6px}
 
-        // NEW LOGIC: BAN OVER 0.5 AND UNDER MARKETS
-        function getPrimaryPick(match) {
-            let best = { name: '', prob: 0, cat: '' };
-            const targets = ['Total Goals', 'Team Goals', 'BTTS'];
-            
-            targets.forEach(cat => {
-                if (match.markets[cat]) {
-                    for (const [name, prob] of Object.entries(match.markets[cat])) {
-                        // Ban Over 0.5, Under markets, and No (BTTS)
-                        if (name.includes('Over 0.5') || name.includes('Under') || name.includes('No')) continue;
+/* form, bet check, bets */
+.form{margin:12px 0 0;padding:11px 13px;border-radius:10px;background:var(--surface-2);font-size:14px}
+.form-h{margin:0 0 6px;font:600 13px/1 var(--font-num);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.frow{display:flex;flex-wrap:wrap;gap:2px 12px;padding:3px 0;color:var(--ink-2)}
+.frow b{flex:1 0 100%;color:var(--ink);font-weight:600}
+.hint{margin:8px 0 0;font-size:13px;color:var(--ink-2)}
+.panel .hint{margin:8px 0}
+.r-note b{color:var(--ink);font-weight:600}
+.logbtn{min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-weight:500;cursor:pointer}
+.lf{margin:10px 0 0;padding:12px;border-radius:10px;background:var(--surface-2)}
+.lf-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lf input.stake{width:104px;min-height:40px;padding:0 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:16px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{min-height:40px;padding:0 14px;border:0;background:var(--bg);font-weight:500;cursor:pointer;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.lw{margin:8px 0 0;font-size:13px;color:var(--ink-2)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 4px}
+.stat{padding:10px 12px;border-radius:10px;background:var(--surface-2)}
+.stat span{display:block;font-size:13px;color:var(--ink-2)}
+.stat b{font:700 22px/1.2 var(--font-num)}
+.stat b.neg{color:var(--warn)} .stat b.pos{color:var(--good)}
+.bet{padding:11px 0;border-top:1px solid var(--line)}
+.bet .bt{display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:600}
+.bet .bm{margin:2px 0 8px;font-size:13px;color:var(--ink-2)}
+.bet .ba{display:flex;flex-wrap:wrap;gap:6px}
+.bet .ba button{min-height:40px;padding:0 13px;border-radius:10px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:500}
+.tag{flex:none;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;background:var(--surface-2);color:var(--ink-2)}
+.tag.won{background:var(--good-bg);color:var(--good)} .tag.lost{background:var(--warn-bg);color:var(--warn)}
+.cfg{display:grid;grid-template-columns:1fr;gap:10px}
+.cfg label{display:block;font-weight:500;font-size:14px}
+.cfg-i{display:block;width:100%;margin-top:4px;min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:16px}
+.panel ol.facts{margin:0}
+.banner ul.facts{color:inherit}
+.banner details{margin-top:4px}
+.banner summary{cursor:pointer;font-weight:600;min-height:32px}
+#csv{margin-top:10px;min-height:120px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
 
-                        // Only look for realistic goal bets
-                        if (prob > best.prob) {
-                            best = { name: name, prob: prob, cat: cat };
-                        }
-                    }
-                }
-            });
-            
-            // If no realistic goal market is found, return empty
-            if (best.prob === 0) return { name: 'No Goal Value', prob: 0, cat: '' };
-            return best;
-        }
+<header class="top">
+  <div class="page">
+    <a class="brand" href="#matches" aria-label="Football AI, all matches">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="2"/><path d="M12 3.5v17" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+      Football AI
+    </a>
+    <nav class="nav" aria-label="Tools">
+      <button type="button" id="nav-data" data-act="data" aria-pressed="false">Data</button>
+      <button type="button" id="nav-bets" data-act="bets" aria-pressed="false">My bets</button>
+      <button type="button" id="nav-about" data-act="about" aria-pressed="false">About</button>
+    </nav>
+  </div>
+</header>
+<main class="page" id="main">
+  <div id="panel"></div>
+  <div id="view" aria-live="polite"></div>
+  <footer class="foot">
+    <p>Estimates from a goals model (Dixon-Coles) trained on results from football-data.co.uk. They are not tips and nothing here guarantees a win.</p>
+    <p>18+. Only bet what you can afford to lose. If betting stops being fun, SportyBet has deposit limits and self-exclusion in its account settings.</p>
+  </footer>
+</main>
 
-        function render() {
-            const app = document.getElementById('app');
-            app.innerHTML = '';
+<script>
+(function () {
+  'use strict';
+  var DEMO = [{"league":"Demo League","time":"15:00","home":"Placeholder FC","away":"Sample Athletic","xg_home":1.201,"xg_away":0.925,"markets":{"Result (1X2)":{"Placeholder FC win":0.4216,"Draw":0.297,"Sample Athletic win":0.2814},"Double chance":{"Placeholder FC or draw":0.7186,"Sample Athletic or draw":0.5784,"Either team wins":0.703},"Draw no bet":{"Placeholder FC":0.5997,"Sample Athletic":0.4003},"Total goals":{"Over 0.5":0.8789,"Under 0.5":0.1211,"Over 1.5":0.6287,"Under 1.5":0.3713,"Over 2.5":0.3573,"Under 2.5":0.6427,"Over 3.5":0.1663,"Under 3.5":0.8337,"Over 4.5":0.0647,"Under 4.5":0.9353},"Placeholder FC goals":{"Over 0.5":0.699,"Over 1.5":0.3376,"Over 2.5":0.1206},"Sample Athletic goals":{"Over 0.5":0.6035,"Over 1.5":0.2367,"Over 2.5":0.0671},"Both teams to score":{"Yes":0.4236,"No":0.5764},"Handicap Placeholder FC -1":{"Placeholder FC (-1)":0.1843,"Draw":0.2373,"Sample Athletic (+1)":0.5784},"Handicap Sample Athletic -1":{"Placeholder FC (+1)":0.7186,"Draw":0.1825,"Sample Athletic (-1)":0.0989},"Correct score (top 5)":{"1-0":0.1415,"1-1":0.1343,"0-0":0.1211,"0-1":0.1087,"2-0":0.086}},"day":0},{"league":"Demo League","time":"17:30","home":"Demo City","away":"Demo Rovers","xg_home":1.126,"xg_away":1.59,"markets":{"Result (1X2)":{"Demo City win":0.268,"Draw":0.2524,"Demo Rovers win":0.4795},"Double chance":{"Demo City or draw":0.5205,"Demo Rovers or draw":0.732,"Either team wins":0.7476},"Draw no bet":{"Demo City":0.3585,"Demo Rovers":0.6415},"Total goals":{"Over 0.5":0.9323,"Under 0.5":0.0677,"Over 1.5":0.7559,"Under 1.5":0.2441,"Over 2.5":0.5104,"Under 2.5":0.4896,"Over 3.5":0.2896,"Under 3.5":0.7104,"Over 4.5":0.1396,"Under 4.5":0.8604},"Demo City goals":{"Over 0.5":0.6757,"Over 1.5":0.3105,"Over 2.5":0.1049},"Demo Rovers goals":{"Over 0.5":0.7962,"Over 1.5":0.472,"Over 2.5":0.2142},"Both teams to score":{"Yes":0.5395,"No":0.4605},"Handicap Demo City -1":{"Demo City (-1)":0.1053,"Draw":0.1627,"Demo Rovers (+1)":0.732},"Handicap Demo Rovers -1":{"Demo City (+1)":0.5205,"Draw":0.2304,"Demo Rovers (-1)":0.2491},"Correct score (top 5)":{"1-1":0.1199,"0-1":0.1036,"1-2":0.0941,"0-2":0.0836,"1-0":0.0729}},"day":0},{"league":"Demo League","time":"20:00","home":"Mock Wanderers","away":"Sample United","xg_home":1.799,"xg_away":1.206,"markets":{"Result (1X2)":{"Mock Wanderers win":0.5114,"Draw":0.2343,"Sample United win":0.2543},"Double chance":{"Mock Wanderers or draw":0.7457,"Sample United or draw":0.4886,"Either team wins":0.7657},"Draw no bet":{"Mock Wanderers":0.6678,"Sample United":0.3322},"Total goals":{"Over 0.5":0.949,"Under 0.5":0.051,"Over 1.5":0.8029,"Under 1.5":0.1971,"Over 2.5":0.5778,"Under 2.5":0.4222,"Over 3.5":0.3538,"Under 3.5":0.6462,"Over 4.5":0.1855,"Under 4.5":0.8145},"Mock Wanderers goals":{"Over 0.5":0.8345,"Over 1.5":0.5368,"Over 2.5":0.269},"Sample United goals":{"Over 0.5":0.7006,"Over 1.5":0.3395,"Over 2.5":0.1218},"Both teams to score":{"Yes":0.586,"No":0.414},"Handicap Mock Wanderers -1":{"Mock Wanderers (-1)":0.2849,"Draw":0.2264,"Sample United (+1)":0.4886},"Handicap Sample United -1":{"Mock Wanderers (+1)":0.7457,"Draw":0.1513,"Sample United (-1)":0.103},"Correct score (top 5)":{"1-1":0.1089,"2-1":0.0967,"1-0":0.0877,"2-0":0.0802,"1-2":0.0648}},"day":1},{"league":"Demo League","time":"12:30","home":"Example Town","away":"Test Albion","xg_home":0.897,"xg_away":2.001,"markets":{"Result (1X2)":{"Example Town win":0.1596,"Draw":0.211,"Test Albion win":0.6294},"Double chance":{"Example Town or draw":0.3706,"Test Albion or draw":0.8404,"Either team wins":0.789},"Draw no bet":{"Example Town":0.2023,"Test Albion":0.7977},"Total goals":{"Over 0.5":0.9436,"Under 0.5":0.0564,"Over 1.5":0.7864,"Under 1.5":0.2136,"Over 2.5":0.5536,"Under 2.5":0.4464,"Over 3.5":0.33,"Under 3.5":0.67,"Over 4.5":0.1679,"Under 4.5":0.8321},"Example Town goals":{"Over 0.5":0.5923,"Over 1.5":0.2265,"Over 2.5":0.0624},"Test Albion goals":{"Over 0.5":0.8648,"Over 1.5":0.5942,"Over 2.5":0.3235},"Both teams to score":{"Yes":0.5135,"No":0.4865},"Handicap Example Town -1":{"Example Town (-1)":0.0516,"Draw":0.108,"Test Albion (+1)":0.8404},"Handicap Test Albion -1":{"Example Town (+1)":0.3706,"Draw":0.2425,"Test Albion (-1)":0.3869},"Correct score (top 5)":{"0-2":0.1103,"0-1":0.109,"1-1":0.1003,"1-2":0.099,"0-3":0.0736}},"day":2}];
 
-            const grouped = {};
-            allMatches.forEach(m => {
-                if (!grouped[m.date]) grouped[m.date] = [];
-                grouped[m.date].push(m);
-            });
+  /* ---------- helpers ---------- */
+  var $ = function (s) { return document.querySelector(s); };
+  var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  var pad = function (n) { return String(n).padStart(2, '0'); };
+  var iso = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  function jget(k, d) { try { var v = JSON.parse(lsGet(k)); return (v === null || v === undefined) ? d : v; } catch (e) { return d; } }
+  function jset(k, v) { lsSet(k, JSON.stringify(v)); }
+  function num(x) { var v = parseFloat(String(x == null ? '' : x).replace(',', '.')); return isFinite(v) ? v : null; }
+  function fmtPct(p) { var x = p * 100; return x < 1 ? '<1' : x > 99 ? '>99' : String(Math.round(x)); }
+  function fmtOdds(p) { if (!(p > 0)) return '-'; var o = 1 / p; return o >= 100 ? '100+' : o.toFixed(2); }
+  function pctTxt(x) { return (x >= 0 ? '+' : '−') + Math.abs(x * 100).toFixed(1) + '%'; }
+  function money(x) {
+    var a = Math.abs(x), s = (a >= 1000 || Math.abs(a - Math.round(a)) < 0.005) ? Math.round(a).toLocaleString('en-US') : a.toFixed(2);
+    return (x < 0 ? '−' : '') + '₦' + s;
+  }
+  function dayLabel(s) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return s || 'Date unknown';
+    var a = s.split('-').map(Number), dt = new Date(a[0], a[1] - 1, a[2]), t = new Date();
+    var t0 = iso(t), t1 = iso(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1));
+    var base = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).format(dt);
+    return s === t0 ? 'Today' : s === t1 ? 'Tomorrow' : base;
+  }
+  function dayLong(s) {
+    var l = dayLabel(s);
+    if (l !== 'Today' && l !== 'Tomorrow') return esc(l);
+    var a = s.split('-').map(Number);
+    return '<b>' + l + '</b> · ' + esc(new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(a[0], a[1] - 1, a[2])));
+  }
+  function fmtGen(s) {
+    var t = Date.parse(s); if (!isFinite(t)) return s;
+    return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+  }
 
-            const sortedDates = Object.keys(grouped).sort();
+  /* ---------- what the backtest says about each kind of market ---------- */
+  var TRUST = {
+    team:   { lvl: 'best', badge: 'Best tested', name: 'Team goals (scores 1+, 2+)', note: 'Backtest: when the model said 80-90% that a team scores, it happened 87% of the time (754 cases). When it said 90% or more, 92% (163 cases).' },
+    result: { lvl: 'fair', badge: 'Fair', name: 'Match result (home, away)', note: 'Backtest: clearly beats guessing, but bookmaker odds were sharper. Draws are weak.' },
+    dnb:    { lvl: 'fair', badge: 'Fair', name: 'Draw no bet', note: 'Built from win chances, which beat guessing. Bookmaker odds were sharper.' },
+    dc:     { lvl: 'fair', badge: 'Fair', name: 'Double chance', note: 'Includes the draw, which is weak. Bookmaker odds were sharper.' },
+    totals: { lvl: 'weak', badge: 'Weak', name: 'Total goals (over/under)', note: 'Backtest: only slightly better than guessing. Bookmaker odds were sharper.' },
+    btts:   { lvl: 'weak', badge: 'Weak', name: 'Both teams to score', note: 'Backtest: no better than guessing, and it ran about 4 points low (said 52%, real 56%).' },
+    hcap:   { lvl: 'untested', badge: 'Untested', name: 'Handicaps', note: 'Not backtested yet.' },
+    cs:     { lvl: 'untested', badge: 'Untested', name: 'Correct score', note: 'Not backtested yet. Exact scores are rarely right.' },
+    other:  { lvl: 'untested', badge: 'Untested', name: 'Other', note: 'Not backtested yet.' }
+  };
+  function kindOf(sec, m) {
+    if (sec.indexOf('Result') === 0) return 'result';
+    if (sec === m.home + ' goals' || sec === m.away + ' goals') return 'team';
+    if (sec === 'Total goals') return 'totals';
+    if (sec.indexOf('Both teams') === 0) return 'btts';
+    if (sec.indexOf('Double chance') === 0) return 'dc';
+    if (sec.indexOf('Draw no bet') === 0) return 'dnb';
+    if (sec.indexOf('Handicap') === 0) return 'hcap';
+    if (sec.indexOf('Correct score') === 0) return 'cs';
+    return 'other';
+  }
+  function secTitle(sec, kind) {
+    if (kind === 'result') return 'Match result';
+    if (kind === 'totals') return 'Total goals';
+    if (kind === 'hcap') return sec.replace(/ -1$/, ' −1').replace('Handicap ', 'Handicap: ');
+    if (kind === 'cs') return 'Likeliest scores';
+    return sec;
+  }
+  function edgeNote(kind, label) {
+    if (kind === 'result' || kind === 'dnb' || kind === 'dc') return 'Backtest: result picks with a 5%+ model edge lost 15.6% over 1,312 bets.';
+    if (kind === 'totals') return label.indexOf('2.5') > -1 ? 'Backtest: over/under 2.5 picks with a 10%+ edge returned +2.7% (give or take 5.4). Inconclusive.' : 'Not backtested at this line.';
+    if (kind === 'team') return 'Free data has no odds for this market, so it is untested against bookmaker prices.';
+    return 'This market is weak or untested, so a gap here is more likely model error than value.';
+  }
 
-            sortedDates.forEach(date => {
-                const dateDiv = document.createElement('div');
-                dateDiv.className = 'date-group';
-                
-                const today = new Date().toISOString().split('T')[0];
-                const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-                let dateLabel = date;
-                if (date === today) dateLabel = "TODAY";
-                else if (date === tomorrow) dateLabel = "TOMORROW";
-                else {
-                    const d = new Date(date);
-                    dateLabel = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' }).toUpperCase();
-                }
+  /* ---------- the bet check (pure maths, no opinions hidden) ---------- */
+  function parseOdds(v) { var x = num(v); return x !== null && x >= 1.01 && x <= 1000 ? x : null; }
+  function verdict(kind, label, p, o) {
+    var ev = p * o - 1, cev = ev / 2;           /* cautious edge: the bookmaker gets half the vote */
+    if (ev <= 0) return { code: 'skip', text: 'No edge. Skip it.' };
+    if (kind === 'team' && label === 'Over 0.5' && p >= 0.8) {
+      if (cev >= 0.05) return { code: 'test', text: 'Worth a small test stake.' };
+      return { code: 'thin', text: 'Edge too thin. Skip it, or track it on paper.' };
+    }
+    return { code: 'paper', text: 'Paper only: this market has not shown it can beat bookmaker odds.' };
+  }
+  function fmtN(x) { return x >= 10 ? String(Math.round(x)) : String(Math.round(x * 10) / 10); }
 
-                let dateHTML = `<div class="date-title">${dateLabel}</div>`;
+  /* ---------- state ---------- */
+  var S = { data: null, demo: false, src: '', league: 'All', day: 'All', panel: null, scroll: null,
+    bets: jget('fai-bets', []), cfg: jget('fai-cfg', {}), betF: 'all', csv: false, delAll: false };
+  if (!Array.isArray(S.bets)) S.bets = [];
+  if (!S.cfg || typeof S.cfg !== 'object') S.cfg = {};
+  function saveBets() { jset('fai-bets', S.bets); }
+  function cfgNum(k, d) { var v = num(S.cfg[k]); return v === null ? d : v; }
+  function todayRealStake() {
+    var t = iso(new Date());
+    return S.bets.filter(function (b) { return b.mode === 'real' && String(b.at).slice(0, 10) === t; }).reduce(function (a, b) { return a + b.stake; }, 0);
+  }
+  function suggestStake(p, o) {
+    var bank = num(S.cfg.bank); if (!bank || bank <= 0) return null;
+    var cev = (p * o - 1) / 2, f = cev / (o - 1), cap = cfgNum('maxpct', 2) / 100;
+    return Math.max(0, Math.min(f / 4, cap) * bank);
+  }
 
-                const leaguesInDate = {};
-                grouped[date].forEach(m => {
-                    if (!leaguesInDate[m.league]) leaguesInDate[m.league] = [];
-                    leaguesInDate[m.league].push(m);
-                });
+  /* ---------- data ---------- */
+  function convertNew(m) {
+    var M = m.markets, R = M['Result'] || {}, H = +R['Home Win'], D = +R['Draw'], A = +R['Away Win'], out = {};
+    out['Result (1X2)'] = {}; out['Result (1X2)'][m.home + ' win'] = H; out['Result (1X2)']['Draw'] = D; out['Result (1X2)'][m.away + ' win'] = A;
+    var tg = M['Team Goals'] || {};
+    [m.home, m.away].forEach(function (t) {
+      var o = {};
+      ['0.5', '1.5', '2.5'].forEach(function (l) { var v = tg[t + ' Over ' + l]; if (v !== undefined && isFinite(+v)) o['Over ' + l] = +v; });
+      if (Object.keys(o).length) out[t + ' goals'] = o;
+    });
+    var tot = M['Total Goals'];
+    if (tot) {
+      var t = {};
+      Object.keys(tot).forEach(function (k) { var line = k.replace('Over ', ''); if (isFinite(+tot[k])) { t['Over ' + line] = +tot[k]; t['Under ' + line] = 1 - tot[k]; } });
+      out['Total goals'] = t;
+    }
+    if (M['BTTS']) out['Both teams to score'] = { 'Yes': +M['BTTS']['Yes'], 'No': +M['BTTS']['No'] };
+    var dc = {}; dc[m.home + ' or draw'] = H + D; dc[m.away + ' or draw'] = A + D; dc['Either team wins'] = H + A; out['Double chance'] = dc;
+    if (H + A > 0) { var dn = {}; dn[m.home] = H / (H + A); dn[m.away] = A / (H + A); out['Draw no bet'] = dn; }
+    if (M['Correct Score']) out['Correct score (top 5)'] = M['Correct Score'];
+    var c = {}; Object.keys(m).forEach(function (k) { c[k] = m[k]; }); c.markets = out;
+    return c;
+  }
+  function normalize(raw) {
+    var list = Array.isArray(raw) ? raw : (raw && raw.matches);
+    if (!Array.isArray(list)) throw new Error('No "matches" list in this file. Use the predictions.json that daily_run.py saves.');
+    var out = [], schema = 'old';
+    list.forEach(function (m) {
+      if (m && m.markets && m.markets['Result'] && !m.markets['Result (1X2)']) { m = convertNew(m); schema = 'new'; }
+      var res = m && m.markets && m.markets['Result (1X2)'];
+      if (!m || !m.home || !m.away || !res) return;
+      var v = Object.keys(res).map(function (k) { return +res[k]; });
+      if (v.length !== 3 || v.some(function (x) { return !isFinite(x); })) return;
+      out.push({ home: String(m.home), away: String(m.away), league: String(m.league || ''), date: String(m.date || ''), time: String(m.time || ''),
+        xgH: +m.xg_home, xgA: +m.xg_away, markets: m.markets, p: v, formH: m.form_home || null, formA: m.form_away || null });
+    });
+    if (!out.length) throw new Error('No usable matches found in this file.');
+    out.sort(function (a, b) { return (a.date + a.time).localeCompare(b.date + b.time) || a.league.localeCompare(b.league); });
+    out.forEach(function (m, i) { m.id = i; m.key = m.date + '|' + m.home + '|' + m.away; });
+    return { generated: (raw && raw.generated) || '', matches: out, schema: schema,
+      skipped: (raw && Array.isArray(raw.skipped)) ? raw.skipped.map(String) : [], warnings: (raw && Array.isArray(raw.warnings)) ? raw.warnings.map(String) : [] };
+  }
+  function demoRaw() {
+    var t = new Date();
+    return { generated: new Date().toISOString(), matches: DEMO.map(function (m) {
+      var c = JSON.parse(JSON.stringify(m)); c.date = iso(new Date(t.getFullYear(), t.getMonth(), t.getDate() + (m.day || 0))); return c;
+    }) };
+  }
+  function setData(raw, src, demo, persist) {
+    S.data = normalize(raw); S.demo = !!demo; S.src = src; S.league = 'All'; S.day = 'All';
+    if (persist) { lsSet('fai-data', JSON.stringify(raw)); lsSet('fai-src', src); }
+  }
+  function loadText(text, src) {
+    try {
+      setData(JSON.parse(text), src, false, true);
+      S.panel = null; renderPanel();
+      if (location.hash && location.hash !== '#matches') { location.hash = '#matches'; } else { route(); }
+      flash('Loaded ' + S.data.matches.length + ' matches.');
+    } catch (e) { flash(e.message || 'That is not valid JSON.', true); }
+  }
+  function flash(t, err) {
+    var el = $('#panel-msg');
+    if (el) { el.textContent = t; el.className = 'msg' + (err ? ' err' : ''); }
+    else { var s = $('#status-msg'); if (s) { s.textContent = t; } }
+  }
 
-                let leagueHTML = '';
-                const sortedLeagues = Object.keys(leaguesInDate).sort();
+  /* ---------- list view ---------- */
+  function chipsHtml(f, items, cur, label, aria) {
+    return '<div class="chips" role="group" aria-label="' + aria + '">' + items.map(function (v) {
+      return '<button type="button" class="chip" data-f="' + f + '" data-v="' + esc(v) + '" aria-pressed="' + (v === cur) + '">' + esc(label(v)) + '</button>';
+    }).join('') + '</div>';
+  }
+  function statusHtml(n, past) {
+    var d = S.data, s = '<div class="status">';
+    if (S.demo) s += '<div class="banner"><p><b>Demo data.</b> These teams are made up. Load your own predictions to see real matches.</p><button type="button" class="btn" data-act="data">Load your predictions</button></div>';
+    s += '<p class="line" id="status-msg">' + n + ' match' + (n === 1 ? '' : 'es') + (d.generated && !S.demo ? ' · Updated ' + esc(fmtGen(d.generated)) : '') + '</p>';
+    var age = (Date.now() - Date.parse(d.generated)) / 864e5;
+    if (!S.demo && isFinite(age) && age > 2) s += '<div class="banner"><p>These predictions are ' + Math.floor(age) + ' days old. Run daily_run.py again and load the new file.</p></div>';
+    if (past && !S.demo) s += '<div class="banner"><p>All of these matches have been played already. Load newer predictions.</p></div>';
+    if (d.skipped.length) s += '<div class="banner"><p><b>' + d.skipped.length + ' game' + (d.skipped.length === 1 ? '' : 's') + ' left out.</b> The AI could not safely match a team name, so it skipped the game instead of guessing.</p>' +
+      '<details><summary>See which</summary><ul class="facts">' + d.skipped.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details></div>';
+    if (d.warnings.length) s += '<div class="banner"><p><b>Data warning.</b></p><ul class="facts">' + d.warnings.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>';
+    return s + '</div>';
+  }
+  function cardHtml(m) {
+    var p = m.p, gh = m.markets[m.home + ' goals'], ga = m.markets[m.away + ' goals'], tot = m.markets['Total goals'], bt = m.markets['Both teams to score'];
+    var sc = (gh && ga) ? '<p class="scores">Scores 1+: <b>' + esc(m.home) + ' ' + fmtPct(+gh['Over 0.5']) + '%</b> · <b>' + esc(m.away) + ' ' + fmtPct(+ga['Over 0.5']) + '%</b></p>' : '';
+    if (tot && tot['Over 1.5'] !== undefined && tot['Over 2.5'] !== undefined) {
+      sc += '<p class="scores">Goals: over 1.5 <b>' + fmtPct(+tot['Over 1.5']) + '%</b> · over 2.5 <b>' + fmtPct(+tot['Over 2.5']) + '%</b>' + (bt ? ' · both score <b>' + fmtPct(+bt['Yes']) + '%</b>' : '') + '</p>';
+    }
+    var xg = (isFinite(m.xgH) && isFinite(m.xgA)) ? 'Expected goals ' + m.xgH.toFixed(1) + ' – ' + m.xgA.toFixed(1) : '';
+    return '<a class="card" href="#m-' + m.id + '" data-card="1">' +
+      '<div class="meta"><span>' + esc(m.league) + '</span><span>' + esc(m.time) + '</span></div>' +
+      '<div class="trow"><span class="tn"><i class="dot h"></i><span class="tname">' + esc(m.home) + '</span></span><span class="tpct">' + fmtPct(p[0]) + '<small>%</small></span></div>' +
+      '<div class="trow"><span class="tn"><i class="dot a"></i><span class="tname">' + esc(m.away) + '</span></span><span class="tpct">' + fmtPct(p[2]) + '<small>%</small></span></div>' +
+      '<div class="bar" role="img" aria-label="' + esc(m.home) + ' ' + fmtPct(p[0]) + ' percent, draw ' + fmtPct(p[1]) + ' percent, ' + esc(m.away) + ' ' + fmtPct(p[2]) + ' percent">' +
+      '<i class="h" style="flex:' + p[0] + '"></i><i style="flex:' + p[1] + '"></i><i class="a" style="flex:' + p[2] + '"></i></div>' +
+      '<div class="sub"><span class="d"><i class="dot"></i>Draw ' + fmtPct(p[1]) + '%</span><span>' + xg + '</span></div>' + sc + '</a>';
+  }
+  function renderList() {
+    var d = S.data, today = iso(new Date());
+    var up = d.matches.filter(function (m) { return !m.date || m.date >= today; });
+    var past = up.length === 0, pool = past ? d.matches : up;
+    var leagues = pool.map(function (m) { return m.league; }).filter(function (v, i, a) { return v && a.indexOf(v) === i; });
+    var days = pool.map(function (m) { return m.date; }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+    if (S.league !== 'All' && leagues.indexOf(S.league) < 0) S.league = 'All';
+    if (S.day !== 'All' && days.indexOf(S.day) < 0) S.day = 'All';
+    var list = pool.filter(function (m) { return (S.league === 'All' || m.league === S.league) && (S.day === 'All' || m.date === S.day); });
+    var html = statusHtml(pool.length, past);
+    if (leagues.length > 1) html += chipsHtml('league', ['All'].concat(leagues), S.league, function (v) { return v === 'All' ? 'All leagues' : v; }, 'Filter by league');
+    if (days.length > 1) html += chipsHtml('day', ['All'].concat(days), S.day, function (v) { return v === 'All' ? 'All days' : dayLabel(v); }, 'Filter by day');
+    if (!list.length) html += '<p class="empty">No matches for this filter.</p>';
+    var last = null;
+    list.forEach(function (m) {
+      if (m.date !== last) { html += '<h2 class="day">' + dayLong(m.date) + '</h2>'; last = m.date; }
+      html += cardHtml(m);
+    });
+    $('#view').innerHTML = html;
+    $('#panel').hidden = false;
+    if (S.scroll != null) { var y = S.scroll; S.scroll = null; window.scrollTo(0, y); }
+  }
 
-                sortedLeagues.forEach(league => {
-                    let matchesHTML = '';
-                    
-                    leaguesInDate[league].forEach(match => {
-                        const topPick = getPrimaryPick(match);
-                        // Only show matches that actually have a goal market left
-                        if (topPick.prob === 0) return; 
-                        matchesHTML += buildCardHTML(match, topPick);
-                    });
+  /* ---------- detail view ---------- */
+  function goalDist(m, team) {
+    var g = m.markets[team + ' goals']; if (!g) return null;
+    var a = +g['Over 0.5'], b = +g['Over 1.5'], c = g['Over 2.5'] === undefined ? null : +g['Over 2.5'];
+    if (!isFinite(a) || !isFinite(b)) return null;
+    var d = c !== null && isFinite(c) ? [1 - a, a - b, b - c, c] : [1 - a, a - b, b];
+    return d.map(function (x) { return Math.max(0, x); });
+  }
+  function teamCard(m, team, side) {
+    var d = goalDist(m, team); if (!d) return '';
+    var n = d.length, last = n - 1, k = d.indexOf(Math.max.apply(null, d)), names = n === 4 ? ['0', '1', '2', '3+'] : ['0', '1', '2+'], top = Math.max.apply(null, d);
+    var cols = '', axis = '';
+    d.forEach(function (v, i) {
+      cols += '<div class="col' + (i === k ? ' top' : '') + '"><div class="cb" style="height:' + Math.max(2, v / top * 62).toFixed(0) + 'px"></div></div>';
+      axis += '<div>' + names[i] + '<b>' + fmtPct(v) + '%</b></div>';
+    });
+    var txt;
+    if (k === 0) txt = 'Most likely: <b>no goal</b> (' + fmtPct(d[0]) + '%).';
+    else if (k === last) txt = 'Most likely: <b>' + (n === 4 ? '3 or more goals' : '2 or more goals') + '</b> (' + fmtPct(d[last]) + '%).';
+    else txt = 'Most likely: <b>' + k + ' goal' + (k === 1 ? '' : 's') + '</b> (' + fmtPct(d[k]) + '%). Safer: <b>over ' + (k - 0.5).toFixed(1) + '</b> (' + fmtPct(d.slice(k).reduce(function (a, b) { return a + b; }, 0)) + '%).';
+    var gt = 'grid-template-columns:repeat(' + n + ',1fr)';
+    return '<article class="tcard ' + side + '"><h3><i class="dot ' + (side === 'home' ? 'h' : 'a') + '"></i>' + esc(team) + ' goals</h3>' +
+      '<div class="cols" style="' + gt + '" role="img" aria-label="Chance of ' + names.join(', ') + ' goals: ' + d.map(function (v) { return fmtPct(v) + ' percent'; }).join(', ') + '">' + cols + '</div>' +
+      '<div class="axis" style="' + gt + '">' + axis + '</div><p>' + txt + '</p></article>';
+  }
+  function formHtml(m) {
+    var a = m.formH, b = m.formA;
+    if (!a || !b || a.fts === undefined || b.fts === undefined) return '';
+    var row = function (t, f) { return '<div class="frow"><b>' + esc(t) + '</b><span>No goal ' + f.fts + '%</span><span>Clean sheet ' + f.cs + '%</span><span>Both scored ' + f.btts + '%</span></div>'; };
+    return '<div class="form"><p class="form-h">Last 5 games</p>' + row(m.home, a) + row(m.away, b) + '</div>';
+  }
+  function loadOdds(key) { try { return (JSON.parse(lsGet('fai-odds') || '{}') || {})[key] || {}; } catch (e) { return {}; } }
+  function saveOdd(key, k, v) {
+    try { var all = JSON.parse(lsGet('fai-odds') || '{}') || {}; all[key] = all[key] || {}; if (v) all[key][k] = v; else delete all[key][k]; lsSet('fai-odds', JSON.stringify(all)); } catch (e) {}
+  }
+  function tone(kind, sec, label, m) {
+    if (kind === 'result') return label === m.home + ' win' ? 'h' : label === m.away + ' win' ? 'a' : 'd';
+    if (kind === 'dnb') return label === m.home ? 'h' : label === m.away ? 'a' : '';
+    if (kind === 'team') return sec === m.home + ' goals' ? 'h' : 'a';
+    return '';
+  }
+  function rowHtml(m, sec, kind, label, p, n, saved) {
+    var key = sec + '|' + label, val = saved[key] || '';
+    return '<li class="row" data-p="' + p + '" data-kind="' + kind + '" data-label="' + esc(label) + '" data-sec="' + esc(secTitle(sec, kind)) + '">' +
+      '<div class="r-top"><span class="r-label">' + esc(label) + '</span><span class="r-p">' + fmtPct(p) + '<small>%</small></span></div>' +
+      '<div class="meter" role="img" aria-label="' + esc(label) + ': ' + fmtPct(p) + ' percent"><i class="' + tone(kind, sec, label, m) + '" style="width:' + Math.max(1, Math.min(100, p * 100)).toFixed(1) + '%"></i></div>' +
+      '<div class="r-bot"><span class="fair">Fair odds <b>' + fmtOdds(p) + '</b></span>' +
+      '<input class="odds" id="o-' + m.id + '-' + n + '" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" placeholder="Your odds" value="' + esc(val) + '" aria-label="SportyBet odds for ' + esc(label) + '" data-k="' + esc(key) + '">' +
+      '<span class="res" hidden></span><button type="button" class="logbtn" data-act="logbtn" hidden>Log bet</button></div>' +
+      '<p class="r-note" hidden></p><div class="lf-slot"></div></li>';
+  }
+  function renderDetail(m) {
+    var saved = loadOdds(m.key), n = 0;
+    var order = ['Result (1X2)', m.home + ' goals', m.away + ' goals', 'Total goals', 'Both teams to score', 'Double chance', 'Draw no bet',
+      'Handicap ' + m.home + ' -1', 'Handicap ' + m.away + ' -1', 'Correct score (top 5)'];
+    Object.keys(m.markets).forEach(function (k) { if (order.indexOf(k) < 0) order.push(k); });
+    var secs = order.filter(function (k) { return m.markets[k]; }).map(function (sec, i) {
+      var kind = kindOf(sec, m), t = TRUST[kind], rows = '';
+      Object.keys(m.markets[sec]).forEach(function (label) { rows += rowHtml(m, sec, kind, label, +m.markets[sec][label], n++, saved); });
+      return '<details class="sec"' + (i < 3 ? ' open' : '') + '><summary><span class="s-title">' + esc(secTitle(sec, kind)) + '</span><span class="badge ' + t.lvl + '">' + t.badge + '</span></summary>' +
+        '<p class="s-note">' + esc(t.note) + '</p><ul class="rows">' + rows + '</ul></details>';
+    }).join('');
+    var xg = (isFinite(m.xgH) && isFinite(m.xgA)) ? '<p class="xg">Expected goals <b>' + m.xgH.toFixed(2) + '</b> – <b>' + m.xgA.toFixed(2) + '</b></p>' : '';
+    var newModel = S.data.schema === 'new' ? ' This file comes from the newer model, which has not been backtested.' : '';
+    $('#view').innerHTML = '<a class="back" href="#matches">← All matches</a>' +
+      '<p class="kick">' + esc(m.league) + ' · ' + esc(dayLabel(m.date)) + (m.time ? ' · ' + esc(m.time) : '') + '</p>' +
+      '<h1 class="dt"><span class="tn"><i class="dot h"></i>' + esc(m.home) + '</span><span class="tn"><i class="dot a"></i>' + esc(m.away) + '</span></h1>' + xg +
+      '<p class="howto"><b>Fair odds</b> = 100 ÷ chance. Type SportyBet\'s odds into a row. The page shows the break-even rate, the edge, and whether it thinks the bet deserves any money. Most rows will say skip, and that is the honest answer most of the time.' + newModel + '</p>' +
+      formHtml(m) + '<div class="scoring">' + teamCard(m, m.home, 'home') + teamCard(m, m.away, 'away') + '</div>' + secs;
+    $('#panel').hidden = true;
+    document.querySelectorAll('#view input.odds').forEach(function (inp) { if (inp.value) updateRow(inp, false); });
+  }
+  function currentMatch() { var mm = /^m-(\d+)$/.exec(location.hash.slice(1)); return mm && S.data && S.data.matches[+mm[1]]; }
+  function updateRow(inp, save) {
+    var row = inp.closest('.row'), res = row.querySelector('.res'), note = row.querySelector('.r-note'), btn = row.querySelector('.logbtn'), slot = row.querySelector('.lf-slot');
+    var o = parseOdds(inp.value), p = +row.dataset.p, kind = row.dataset.kind, label = row.dataset.label;
+    if (save) { var m = currentMatch(); if (m) saveOdd(m.key, inp.dataset.k, inp.value.trim()); }
+    if (o === null) { res.hidden = true; note.hidden = true; btn.hidden = true; slot.innerHTML = ''; return; }
+    var ev = p * o - 1, v = verdict(kind, label, p, o), be = 1 / o, wins = 1 / (o - 1);
+    res.hidden = false; res.className = 'res' + (ev > 0 ? ' up' : ''); res.textContent = pctTxt(ev) + (ev > 0 ? ' model edge' : ' · no edge');
+    var back = o >= 2 ? 'One win repays <b>' + fmtN(o - 1) + '</b> ' + (Math.abs(o - 2) < 0.05 ? 'loss' : 'losses') + '.'
+      : 'After one loss it takes <b>' + fmtN(wins) + '</b> ' + (Math.abs(wins - 1) < 0.05 ? 'win' : 'wins') + ' to get back to even.';
+    var html = 'Break-even: you must win <b>' + Math.round(be * 100) + '</b> of every 100. ' + back;
+    if (ev > 0) html += ' Cautious edge ' + pctTxt(ev / 2) + ' (half the model edge, because bookmaker odds were sharper in testing). ' + esc(edgeNote(kind, label));
+    html += ' <b>' + esc(v.text) + '</b>';
+    if (v.code === 'test') {
+      var s = suggestStake(p, o);
+      html += s === null ? ' Set your bankroll in My bets for a stake guide.' : ' Stake guide: <b>' + money(s) + '</b> (a quarter of the cautious Kelly stake, capped at ' + cfgNum('maxpct', 2) + '% of your bankroll).';
+    }
+    note.innerHTML = html; note.hidden = false; btn.hidden = false;
+  }
 
-                    if (matchesHTML !== '') {
-                        leagueHTML += `
-                            <div class="league-group">
-                                <div class="league-title">${league}</div>
-                                ${matchesHTML}
-                            </div>
-                        `;
-                    }
-                });
+  /* ---------- logging a bet ---------- */
+  function openLog(row) {
+    var slot = row.querySelector('.lf-slot');
+    if (slot.innerHTML) { slot.innerHTML = ''; return; }
+    var o = parseOdds(row.querySelector('input.odds').value); if (o === null) return;
+    var p = +row.dataset.p, v = verdict(row.dataset.kind, row.dataset.label, p, o), s = suggestStake(p, o);
+    var def = (v.code === 'test' && s) ? String(Math.max(1, Math.round(s))) : '';
+    slot.innerHTML = '<div class="lf"><div class="lf-row"><input class="stake" type="text" inputmode="decimal" autocomplete="off" placeholder="Stake ₦" aria-label="Stake in naira" value="' + def + '">' +
+      '<div class="seg" role="group" aria-label="Bet type"><button type="button" data-act="mode" data-v="paper" aria-pressed="true">Paper</button><button type="button" data-act="mode" data-v="real" aria-pressed="false">Real</button></div>' +
+      '<button type="button" class="btn primary" data-act="savebet">Log bet</button></div>' +
+      '<p class="lw" role="status">Paper means no money: you only track whether the pick would have won.</p></div>';
+  }
+  function betWarnings(row, o, stake, mode) {
+    var out = [];
+    if (mode !== 'real') return out;
+    var v = verdict(row.dataset.kind, row.dataset.label, +row.dataset.p, o), bank = num(S.cfg.bank), lim = num(S.cfg.daily);
+    if (v.code !== 'test') out.push('The page sees no real-money case for this bet.');
+    if (bank > 0) { var cap = bank * cfgNum('maxpct', 2) / 100; if (stake > cap + 0.005) out.push('That is above your max stake of ' + money(cap) + '.'); }
+    if (lim > 0 && todayRealStake() + stake > lim) out.push('It takes today\'s real stakes over your daily limit of ' + money(lim) + '.');
+    return out;
+  }
+  function saveBet(row) {
+    var lf = row.querySelector('.lf'), warn = lf.querySelector('.lw'), o = parseOdds(row.querySelector('input.odds').value), stake = num(lf.querySelector('.stake').value);
+    var mode = lf.querySelector('.seg [aria-pressed="true"]').dataset.v, m = currentMatch();
+    if (!m || o === null) return;
+    if (stake === null || stake <= 0) { warn.textContent = 'Enter a stake first.'; return; }
+    var w = betWarnings(row, o, stake, mode), sig = w.join('|') + '#' + stake + '#' + mode;
+    if (w.length && lf.dataset.ok !== sig) { lf.dataset.ok = sig; warn.textContent = w.join(' ') + ' Tap Log bet again to log it anyway.'; return; }
+    var now = new Date();
+    S.bets.push({ id: now.getTime().toString(36) + Math.random().toString(36).slice(2, 6), at: iso(now) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes()),
+      date: m.date, league: m.league, match: m.home + ' v ' + m.away, market: row.dataset.sec + ': ' + row.dataset.label, odds: o, stake: stake, p: +row.dataset.p, mode: mode, st: 'open' });
+    saveBets();
+    row.querySelector('.lf-slot').innerHTML = '<p class="hint">Logged as ' + mode + ' bet: ' + money(stake) + ' at ' + o + '. Find it in My bets.</p>';
+  }
 
-                if (leagueHTML !== '') {
-                    dateDiv.innerHTML = dateHTML + leagueHTML;
-                    app.appendChild(dateDiv);
-                }
-            });
-        }
+  /* ---------- My bets ---------- */
+  function betStats(list) {
+    var settled = list.filter(function (b) { return b.st === 'won' || b.st === 'lost'; });
+    var won = settled.filter(function (b) { return b.st === 'won'; }).length, staked = 0, ret = 0;
+    settled.forEach(function (b) { staked += b.stake; if (b.st === 'won') ret += b.stake * b.odds; });
+    var n = settled.length, avg = function (f) { return n ? settled.reduce(function (a, b) { return a + f(b); }, 0) / n : null; };
+    return { n: n, won: won, staked: staked, ret: ret, profit: ret - staked, roi: staked > 0 ? (ret - staked) / staked : null,
+      hit: n ? won / n : null, be: avg(function (b) { return 1 / b.odds; }), avgp: avg(function (b) { return b.p; }), open: list.filter(function (b) { return b.st === 'open'; }).length };
+  }
+  function csvText() {
+    var q = function (x) { return '"' + String(x).replace(/"/g, '""') + '"'; };
+    var rows = [['logged', 'match_date', 'league', 'match', 'market', 'odds', 'stake', 'model_prob', 'mode', 'status'].join(',')];
+    S.bets.forEach(function (b) { rows.push([b.at, b.date, q(b.league), q(b.match), q(b.market), b.odds, b.stake, b.p.toFixed(4), b.mode, b.st].join(',')); });
+    return rows.join('\n');
+  }
+  function betsPanel() {
+    var f = S.betF, list = S.bets.filter(function (b) { return f === 'all' || b.mode === f; }), st = betStats(list);
+    var h = '<section class="panel" aria-labelledby="ph"><h2 id="ph">My bets</h2>' +
+      '<p>Log a bet from any match page (type the odds, tap Log bet). Mark it won or lost afterwards. This is how you find out, with real numbers, whether the AI is worth any money.</p>' +
+      '<div class="chips" role="group" aria-label="Show">' + [['all', 'All'], ['paper', 'Paper'], ['real', 'Real money']].map(function (x) {
+        return '<button type="button" class="chip" data-f="betF" data-v="' + x[0] + '" aria-pressed="' + (f === x[0]) + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    var tile = function (l, v, cls) { return '<div class="stat"><span>' + l + '</span><b class="' + (cls || '') + '">' + v + '</b></div>'; };
+    h += '<div class="stats">' +
+      tile('Settled', st.n + (st.n ? ' (' + st.won + ' won)' : '')) +
+      tile('Profit', st.n ? money(st.profit) : '–', st.n ? (st.profit < 0 ? 'neg' : st.profit > 0 ? 'pos' : '') : '') +
+      tile('Won', st.hit === null ? '–' : Math.round(st.hit * 100) + '%') +
+      tile('Needed to break even', st.be === null ? '–' : Math.round(st.be * 100) + '%') +
+      tile('AI said (average)', st.avgp === null ? '–' : Math.round(st.avgp * 100) + '%') +
+      tile('Return on stakes', st.roi === null ? '–' : pctTxt(st.roi), st.roi === null ? '' : (st.roi < 0 ? 'neg' : 'pos')) + '</div>';
+    if (!st.n) h += '<p class="hint">Nothing settled yet.' + (st.open ? ' ' + st.open + ' bet' + (st.open === 1 ? ' is' : 's are') + ' still open.' : '') + '</p>';
+    else if (st.n < 100) h += '<p class="hint">Only ' + st.n + ' settled bet' + (st.n === 1 ? '' : 's') + '. Below about 100, luck swamps skill, so do not read a trend yet. If "Won" stays under "Needed to break even", the AI is losing.</p>';
+    else h += '<p class="hint">' + st.n + ' settled bets. If "Won" is above "Needed to break even" and profit is positive, the AI may have an edge. If not, it does not.</p>';
+    var sorted = list.slice().reverse();
+    h += '<h3>Bets</h3>';
+    if (!sorted.length) h += '<p class="hint">No bets logged yet.</p>';
+    sorted.forEach(function (b) {
+      var tagTxt = { open: 'Open', won: 'Won', lost: 'Lost', void: 'Void' }[b.st] || b.st;
+      var acts = b.st === 'open'
+        ? '<button type="button" data-act="settle" data-id="' + b.id + '" data-v="won">Won</button><button type="button" data-act="settle" data-id="' + b.id + '" data-v="lost">Lost</button><button type="button" data-act="settle" data-id="' + b.id + '" data-v="void">Void</button>'
+        : '<button type="button" data-act="settle" data-id="' + b.id + '" data-v="open">Undo</button>';
+      h += '<div class="bet"><div class="bt"><span>' + esc(b.match) + '</span><span class="tag ' + b.st + '">' + tagTxt + '</span></div>' +
+        '<div class="bm">' + esc(b.market) + ' · odds ' + b.odds + ' · ' + money(b.stake) + ' · ' + (b.mode === 'real' ? 'Real' : 'Paper') + ' · AI said ' + fmtPct(b.p) + '%</div>' +
+        '<div class="ba">' + acts + '<button type="button" data-act="delbet" data-id="' + b.id + '">Delete</button></div></div>';
+    });
+    h += '<h3>Your limits</h3><p class="hint">Used for stake guides and warnings on real-money bets. Leave blank to switch off.</p><div class="cfg">' +
+      '<label>Bankroll (₦)<input class="cfg-i" type="text" inputmode="decimal" data-cfg="bank" value="' + esc(S.cfg.bank || '') + '"></label>' +
+      '<label>Max stake (% of bankroll)<input class="cfg-i" type="text" inputmode="decimal" data-cfg="maxpct" placeholder="2" value="' + esc(S.cfg.maxpct || '') + '"></label>' +
+      '<label>Daily limit (₦ of real stakes)<input class="cfg-i" type="text" inputmode="decimal" data-cfg="daily" value="' + esc(S.cfg.daily || '') + '"></label></div>';
+    var td = todayRealStake();
+    if (td > 0) h += '<p class="hint">Real stakes logged today: ' + money(td) + '.</p>';
+    h += '<div class="acts" style="margin-top:12px"><button type="button" class="btn" data-act="csv">' + (S.csv ? 'Hide text version' : 'Show as text (to copy)') + '</button>' +
+      '<button type="button" class="btn" data-act="delall">' + (S.delAll ? 'Tap again to delete all bets' : 'Delete all bets') + '</button></div>';
+    if (S.csv) h += '<textarea readonly id="csv" aria-label="Your bets as text" onfocus="this.select()">' + esc(csvText()) + '</textarea>';
+    return h + '</section>';
+  }
 
-        function buildCardHTML(match, topPick) {
-            const fh = match.form_home || { fts: 0, cs: 0, btts: 0 };
-            const fa = match.form_away || { fts: 0, cs: 0, btts: 0 };
-            
-            let statsHTML = `
-                <div class="deep-stats">
-                    <div class="stat-col">
-                        <div style="font-weight:bold; color:var(--text); margin-bottom:4px;">${match.home}</div>
-                        <div class="stat-row"><span>Failed to Score:</span> <span>${fh.fts}%</span></div>
-                        <div class="stat-row"><span>Clean Sheets:</span> <span>${fh.cs}%</span></div>
-                        <div class="stat-row"><span>BTTS (Last 5):</span> <span>${fh.btts}%</span></div>
-                    </div>
-                    <div class="stat-col">
-                        <div style="font-weight:bold; color:var(--text); margin-bottom:4px;">${match.away}</div>
-                        <div class="stat-row"><span>Failed to Score:</span> <span>${fa.fts}%</span></div>
-                        <div class="stat-row"><span>Clean Sheets:</span> <span>${fa.cs}%</span></div>
-                        <div class="stat-row"><span>BTTS (Last 5):</span> <span>${fa.btts}%</span></div>
-                    </div>
-                </div>
-            `;
+  /* ---------- panels ---------- */
+  function renderPanel() {
+    var el = $('#panel'), p = S.panel;
+    $('#nav-data').setAttribute('aria-pressed', p === 'data'); $('#nav-about').setAttribute('aria-pressed', p === 'about'); $('#nav-bets').setAttribute('aria-pressed', p === 'bets');
+    if (!p) { el.innerHTML = ''; return; }
+    if (p === 'data') {
+      el.innerHTML = '<section class="panel" aria-labelledby="ph"><h2 id="ph">Load predictions</h2>' +
+        '<p>Run <b>daily_run.py</b>, then load the <b>predictions.json</b> it saves. The page remembers it on this phone.</p>' +
+        '<div class="acts"><label class="btn primary" for="file">Choose predictions.json</label><input class="sr" id="file" type="file" accept=".json,application/json,text/plain"></div>' +
+        '<label class="l" for="paste">Or paste the file contents</label><textarea id="paste" placeholder="{ &quot;generated&quot;: …, &quot;matches&quot;: [ … ] }"></textarea>' +
+        '<div class="acts" style="margin-top:8px"><button type="button" class="btn" data-act="paste">Load pasted data</button></div>' +
+        '<label class="l" for="url">Or load from a web address</label><input id="url" type="url" inputmode="url" placeholder="https://your-site.vercel.app/predictions.json" value="' + esc(lsGet('fai-url') || '') + '">' +
+        '<div class="acts" style="margin-top:8px"><button type="button" class="btn" data-act="url">Load from address</button></div>' +
+        '<div class="acts" style="margin-top:14px"><button type="button" class="btn" data-act="demo">Use demo data</button><button type="button" class="btn" data-act="forget">Forget saved data</button></div>' +
+        '<p class="msg" id="panel-msg" role="status"></p></section>';
+    } else if (p === 'bets') {
+      el.innerHTML = betsPanel();
+    } else {
+      var order = ['team', 'result', 'dnb', 'dc', 'totals', 'btts', 'hcap', 'cs'];
+      var nm = (S.data && S.data.schema === 'new') ? '<p class="banner"><b>Newer model.</b> Your file comes from the newer model (more leagues, shots-based). The results below are for the original model on the Premier League and La Liga. The newer one is untested, so treat it as untested until your own bets and predictions_log.csv say otherwise.</p>' : '';
+      el.innerHTML = '<section class="panel" aria-labelledby="ph"><h2 id="ph">How far to trust this</h2>' + nm +
+        '<p>The original model was replayed on 1,743 past matches from the Premier League and La Liga (the last three seasons, to November 2026). For each match it saw only earlier games.</p>' +
+        '<ul class="trust">' + order.map(function (k) { var t = TRUST[k]; return '<li><div class="h">' + esc(t.name) + ' <span class="badge ' + t.lvl + '">' + t.badge + '</span></div><p>' + esc(t.note) + '</p></li>'; }).join('') + '</ul>' +
+        '<h3>Against the bookmakers</h3><ul class="facts">' +
+        '<li>Match result accuracy score: model 0.990, market 0.972 (lower is better). The market is sharper.</li>' +
+        '<li>Over/under 2.5: model 0.682, market 0.671. The model gets about half of the market\'s edge over guessing.</li>' +
+        '<li>Betting every match result blindly lost 7.0%. Picks where the model saw a 5%+ edge lost 15.6% (1,312 bets).</li>' +
+        '<li>Over/under 2.5 picks with a 10%+ edge returned +2.7%, give or take 5.4. That is inconclusive.</li></ul>' +
+        '<h3>What this means</h3><p>The page estimates chances. It has not shown that it beats bookmaker odds, so a "model edge" is more often the model\'s mistake than a bargain. Newly promoted teams and short histories are the weakest spots.</p>' +
+        '<h3>Rules for playing</h3><ol class="facts">' +
+        '<li><b>Paper first.</b> Log bets as paper until you have 100 settled bets and the profit is positive.</li>' +
+        '<li><b>Check break-even.</b> At odds of 1.25 you must win 80 of every 100, and one loss takes four wins to repay. Short odds leave no room for error.</li>' +
+        '<li><b>Real money only when the page says "Worth a small test stake".</b> That means: a team to score 1+, the model at 80% or more, and a cautious edge of 5% or more. Everything else is paper only.</li>' +
+        '<li><b>Stake small and flat.</b> No more than 2% of your bankroll on one bet. Never raise the stake to win a loss back, and no accumulators to recover.</li>' +
+        '<li><b>Stop at your daily limit.</b> Set it in My bets, and stop for the day when you reach it.</li>' +
+        '<li><b>Let the numbers decide.</b> After 100 settled bets, if "Won" is below "Needed to break even", stop and fix the model, not the stake.</li></ol></section>';
+    }
+  }
+  function togglePanel(name) {
+    S.panel = S.panel === name ? null : name; S.delAll = false; renderPanel();
+    if (S.panel && location.hash && location.hash !== '#matches') location.hash = '#matches'; else route();
+    if (S.panel) window.scrollTo(0, 0);
+  }
 
-            let marketsHTML = '';
-            const buildGrid = (catName) => {
-                if (!match.markets[catName]) return '';
-                let html = `<div class="section-title">${catName}</div><div class="market-grid">`;
-                for (const [name, prob] of Object.entries(match.markets[catName])) {
-                    const probPct = (prob * 100).toFixed(1);
-                    const probClass = prob >= 0.75 ? 'high' : '';
-                    // Gray out the 0.5 and Under markets in the detailed view so user knows to ignore them
-                    const isTrap = name.includes('Over 0.5') || name.includes('Under') || name.includes('No');
-                    const trapStyle = isTrap ? 'opacity: 0.4;' : '';
+  /* ---------- routing ---------- */
+  function route() {
+    var mm = /^m-(\d+)$/.exec(location.hash.slice(1));
+    var m = mm && S.data && S.data.matches[+mm[1]];
+    if (m) { renderDetail(m); window.scrollTo(0, 0); }
+    else renderList();
+    if (!m) { var p = $('#panel'); p.hidden = false; }
+    document.title = m ? m.home + ' v ' + m.away + ' · Football AI' : 'Football AI';
+  }
 
-                    html += `
-                        <div class="market-item" style="${trapStyle}">
-                            <div class="market-name">${name} ${isTrap ? '(Trap)' : ''}</div>
-                            <div class="market-prob ${probClass}">${probPct}%</div>
-                        </div>
-                    `;
-                }
-                return html + '</div>';
-            };
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-act],[data-f],[data-card]'); if (!t) return;
+    if (t.dataset.card) { S.scroll = window.scrollY; return; }
+    if (t.dataset.f === 'betF') { S.betF = t.dataset.v; renderPanel(); return; }
+    if (t.dataset.f) { S[t.dataset.f] = t.dataset.v; renderList(); return; }
+    var a = t.dataset.act;
+    if (a === 'data' || a === 'about' || a === 'bets') togglePanel(a);
+    else if (a === 'logbtn') openLog(t.closest('.row'));
+    else if (a === 'mode') { t.parentNode.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b === t ? 'true' : 'false'); }); var lw = t.closest('.lf').querySelector('.lw'); lw.textContent = t.dataset.v === 'real' ? 'Real: you are placing this bet yourself on SportyBet. This only records it.' : 'Paper means no money: you only track whether the pick would have won.'; }
+    else if (a === 'savebet') saveBet(t.closest('.row'));
+    else if (a === 'settle') { S.bets.forEach(function (b) { if (b.id === t.dataset.id) b.st = t.dataset.v; }); saveBets(); renderPanel(); }
+    else if (a === 'delbet') { S.bets = S.bets.filter(function (b) { return b.id !== t.dataset.id; }); saveBets(); renderPanel(); }
+    else if (a === 'csv') { S.csv = !S.csv; renderPanel(); }
+    else if (a === 'delall') { if (S.delAll) { S.bets = []; saveBets(); S.delAll = false; } else S.delAll = true; renderPanel(); }
+    else if (a === 'paste') { var v = ($('#paste').value || '').trim(); if (!v) flash('Paste the file contents first.', true); else loadText(v, 'pasted on this phone'); }
+    else if (a === 'url') {
+      var u = ($('#url').value || '').trim(); if (!u) { flash('Enter the web address first.', true); return; }
+      flash('Loading…');
+      fetch(u, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+        .then(function (txt) { lsSet('fai-url', u); loadText(txt, u); })
+        .catch(function () { flash('Could not load that address. A preview page may block outside addresses. Your own site or the paste option will work.', true); });
+    }
+    else if (a === 'demo') { setData(demoRaw(), 'demo', true, false); lsDel('fai-data'); S.panel = null; renderPanel(); if (location.hash && location.hash !== '#matches') location.hash = '#matches'; else route(); }
+    else if (a === 'forget') { lsDel('fai-data'); lsDel('fai-src'); lsDel('fai-odds'); flash('Saved predictions and odds removed from this phone. Your bets are kept.'); }
+  });
+  document.addEventListener('change', function (e) {
+    var c = e.target.dataset && e.target.dataset.cfg;
+    if (c) { S.cfg[c] = e.target.value.trim(); jset('fai-cfg', S.cfg); return; }   /* no re-draw: it would steal focus from the next field */
+    if (e.target.id !== 'file' || !e.target.files || !e.target.files[0]) return;
+    var f = e.target.files[0], r = new FileReader();
+    r.onload = function () { loadText(String(r.result), f.name); };
+    r.onerror = function () { flash('Could not read that file.', true); };
+    r.readAsText(f);
+  });
+  document.addEventListener('input', function (e) { if (e.target.matches && e.target.matches('input.odds')) updateRow(e.target, true); });
+  window.addEventListener('hashchange', route);
 
-            marketsHTML += buildGrid('Total Goals');
-            marketsHTML += buildGrid('Team Goals');
-            marketsHTML += buildGrid('BTTS');
+  /* ---------- start ---------- */
+  function start() {
+    var done = function () { renderPanel(); route(); };
+    fetch('predictions.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (raw) { setData(raw, 'predictions.json on this site', false, false); })
+      .catch(function () {
+        var saved = lsGet('fai-data');
+        try { if (saved) { setData(JSON.parse(saved), lsGet('fai-src') || 'saved on this phone', false, false); return; } } catch (e) {}
+        setData(demoRaw(), 'demo', true, false);
+      })
+      .then(done);
+  }
+  start();
+})();
+</script>
 
-            const pickColorClass = topPick.prob >= 0.75 ? 'high' : '';
-
-            return `
-                <div class="match-card">
-                    <div class="card-main" onclick="this.parentElement.classList.toggle('expanded')">
-                        <div class="teams-row">
-                            <div class="team-name">${match.home}</div>
-                            <div class="vs">VS</div>
-                            <div class="team-name away">${match.away}</div>
-                        </div>
-                        <div class="xg-row">
-                            <div>xG <span class="xg-val">${match.xg_home}</span></div>
-                            <div>${match.time}</div>
-                            <div>xG <span class="xg-val">${match.xg_away}</span></div>
-                        </div>
-                        
-                        <div class="primary-pick">
-                            <div class="pick-info">
-                                <span class="pick-label">Best Real Goal Market</span>
-                                <span class="pick-name">${topPick.name}</span>
-                                <span class="pick-prob ${pickColorClass}">${(topPick.prob * 100).toFixed(1)}% Probability</span>
-                            </div>
-                            <div class="odds-input-box">
-                                <input type="number" step="0.01" placeholder="Odds" onclick="event.stopPropagation()" oninput="checkValue(this, ${topPick.prob}, this.closest('.match-card'))">
-                                <div class="val-badge">-</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="details">
-                        ${statsHTML}
-                        ${marketsHTML}
-                    </div>
-                </div>
-            `;
-        }
-
-        function checkValue(input, prob, cardElement) {
-            const odds = parseFloat(input.value);
-            const badge = input.nextElementSibling;
-            
-            if (odds > 1.01) {
-                const implied = 1 / odds;
-                const edge = (prob - implied) * 100;
-                
-                if (edge > 0) {
-                    badge.innerText = `VALUE +${edge.toFixed(1)}%`;
-                    badge.className = 'val-badge show val-good';
-                    cardElement.classList.add('value-found');
-                } else {
-                    badge.innerText = `NO VALUE`;
-                    badge.className = 'val-badge show val-bad';
-                    cardElement.classList.remove('value-found');
-                }
-            } else {
-                badge.className = 'val-badge';
-                cardElement.classList.remove('value-found');
-            }
-        }
-    </script>
 </body>
 </html>
