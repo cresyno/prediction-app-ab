@@ -15,8 +15,7 @@ ACTIVE = ["E0", "E1", "E2", "SP1", "D1", "D2", "N1", "B1", "T1", "SC0"]
 
 SEASONS_BACK = 4; XI = 0.0019; SHRINK = 2.0; MAX_GOALS = 10
 XG_WEIGHT = 0.5; CONVERSION_RATE = 0.33
-FOOTBALL_DATA_API_KEY = "2a67295f23384b56829c9b228e10b369"
-
+FOOTBALL_DATA_API_KEY = os.environ.get("FOOTBALL_DATA_API_KEY", "")   # set as a GitHub secret, never written here
 BASE_URL = "https://www.football-data.co.uk/mmz4281/{s}/{c}.csv"
 try: HERE = os.path.dirname(os.path.abspath(__file__))
 except NameError: HERE = os.getcwd()
@@ -66,13 +65,13 @@ def load_results(code, force=False):
         df = parse_csv(raw)
         if not all(c in df.columns for c in need):
             if all(c in df.columns for c in ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"]):
-                df["HST"], df["AST"] = df["FTHG"], df["FTAG"]
+                df["HST"], df["AST"] = df["FTHG"] / CONVERSION_RATE, df["FTAG"] / CONVERSION_RATE
             else: continue
         df = df[need].copy()
         df["Date"] = parse_dates(df["Date"])
         for c in need[3:]: df[c] = pd.to_numeric(df[c], errors="coerce")
-        df["HST"] = df["HST"].fillna(df["FTHG"])
-        df["AST"] = df["AST"].fillna(df["FTAG"])
+        df["HST"] = df["HST"].fillna(df["FTHG"] / CONVERSION_RATE)
+        df["AST"] = df["AST"].fillna(df["FTAG"] / CONVERSION_RATE)
         frames.append(df.dropna())
     if not frames: return None
     out = pd.concat(frames).sort_values("Date").reset_index(drop=True)
@@ -208,3 +207,4 @@ def build_all(force=False):
         if df is None or len(df) < 100: continue
         models[code] = fit_league(df)
     return models
+                                  
