@@ -3,153 +3,320 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Football AI Pro</title>
+    <title>AI Command Center</title>
     <style>
         :root {
-            --bg: #0b1120; --card: #1e293b; --text: #f8fafc; --muted: #94a3b8;
-            --accent: #3b82f6; --success: #10b981; --danger: #ef4444; --border: #334155;
+            --bg: #0b0f19; --panel: #111827; --card: #1f2937; 
+            --text: #f3f4f6; --muted: #9ca3af;
+            --accent: #3b82f6; --success: #10b981; --danger: #ef4444; --border: #374151;
         }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 50px; }
-        .header { text-align: center; margin-bottom: 24px; }
-        .header h1 { font-size: 1.6rem; margin: 0; background: linear-gradient(to right, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
-        .header p { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
         
-        .match-card { background: var(--card); border-radius: 12px; margin-bottom: 16px; border: 1px solid var(--border); overflow: hidden; transition: all 0.3s ease; }
-        .match-header { padding: 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .match-header:active { background: #2a3a55; }
-        .match-info h3 { margin: 0; font-size: 1.1rem; }
-        .meta { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        /* HEADER & SNIPER MODE */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header h1 { font-size: 1.4rem; margin: 0; color: var(--text); font-weight: 800; }
+        .header p { font-size: 0.75rem; color: var(--muted); margin: 4px 0 0 0; }
         
-        .best-bet-badge { background: rgba(16, 185, 129, 0.15); color: var(--success); padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; text-align: right; }
-        .best-bet-badge span { display: block; font-size: 0.9rem; }
+        .sniper-toggle { display: flex; align-items: center; gap: 8px; background: var(--panel); padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border); cursor: pointer; }
+        .sniper-toggle.active { border-color: var(--success); background: rgba(16, 185, 129, 0.1); }
+        .sniper-toggle span { font-size: 0.8rem; font-weight: bold; color: var(--muted); }
+        .sniper-toggle.active span { color: var(--success); }
         
-        .details { display: none; padding: 16px; border-top: 1px solid var(--border); background: #0f172a; }
-        .match-card.expanded .details { display: block; }
-        .match-card.expanded .match-header { border-bottom: 1px solid var(--border); }
+        /* HIERARCHY (Dates & Leagues) */
+        .date-group { margin-bottom: 30px; }
+        .date-title { font-size: 1.1rem; font-weight: bold; color: var(--accent); border-bottom: 2px solid var(--accent); padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; }
         
-        .xg-box { display: flex; justify-content: space-between; background: #1e293b; padding: 10px; border-radius: 8px; margin-bottom: 16px; text-align: center; font-size: 0.85rem; }
-        .xg-box div { flex: 1; }
-        .xg-val { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
+        .league-group { margin-bottom: 20px; }
+        .league-title { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; padding-left: 4px; display: flex; align-items: center; gap: 6px; }
+        .league-title::before { content: ''; display: inline-block; width: 8px; height: 8px; background: var(--accent); border-radius: 50%; }
 
-        .section-title { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; margin: 16px 0 8px 0; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-        .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .market-item { background: var(--card); padding: 10px; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; }
-        .market-name { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
-        .market-prob { font-size: 1rem; font-weight: bold; color: var(--text); margin-bottom: 8px; }
-        .market-prob.high { color: var(--success); }
-        .odds-input { display: flex; align-items: center; gap: 4px; }
-        input[type="number"] { width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: #0f172a; color: white; font-size: 0.85rem; }
-        .val-badge { font-size: 0.65rem; padding: 4px; border-radius: 4px; font-weight: bold; text-align: center; margin-top: 4px; display: none; }
+        /* MATCH CARD */
+        .match-card { background: var(--card); border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--border); overflow: hidden; transition: all 0.2s; }
+        .match-card.value-found { border-color: var(--success); box-shadow: 0 0 10px rgba(16, 185, 129, 0.2); }
+        
+        .card-main { padding: 16px; cursor: pointer; }
+        .teams-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .team-name { font-size: 1.05rem; font-weight: bold; flex: 1; }
+        .team-name.away { text-align: right; }
+        .vs { font-size: 0.8rem; color: var(--muted); padding: 0 10px; font-weight: bold; }
+        
+        .xg-row { display: flex; justify-content: space-between; background: var(--panel); padding: 8px; border-radius: 8px; font-size: 0.8rem; color: var(--muted); margin-bottom: 12px; text-align: center; }
+        .xg-val { font-size: 1rem; font-weight: bold; color: var(--text); display: block; margin-top: 2px; }
+        
+        /* PRIMARY PICK */
+        .primary-pick { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .pick-info { display: flex; flex-direction: column; }
+        .pick-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .pick-name { font-size: 0.95rem; font-weight: bold; color: var(--accent); margin-top: 2px; }
+        .pick-prob { font-size: 1.1rem; font-weight: 900; color: var(--text); margin-top: 4px; }
+        
+        .odds-input-box { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+        .odds-input-box input { width: 70px; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: white; font-size: 1rem; text-align: center; font-weight: bold; }
+        .val-badge { font-size: 0.65rem; padding: 4px 6px; border-radius: 4px; font-weight: bold; text-align: center; width: 100%; display: none; }
         .val-badge.show { display: block; }
         .val-good { background: rgba(16, 185, 129, 0.2); color: var(--success); }
         .val-bad { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+
+        /* EXPANDED DETAILS */
+        .details { display: none; padding: 16px; border-top: 1px solid var(--border); background: #151c2c; }
+        .match-card.expanded .details { display: block; }
         
-        .loading { text-align: center; color: var(--muted); margin-top: 50px; }
+        .deep-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; background: var(--panel); padding: 12px; border-radius: 8px; }
+        .stat-col { display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem; }
+        .stat-row { display: flex; justify-content: space-between; color: var(--muted); }
+        .stat-row span:last-child { color: var(--text); font-weight: bold; }
+
+        .section-title { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; margin: 16px 0 8px 0; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+        .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .market-item { background: var(--card); padding: 10px; border-radius: 8px; display: flex; flex-direction: column; }
+        .market-name { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
+        .market-prob { font-size: 1rem; font-weight: bold; margin-bottom: 8px; }
+        .market-prob.high { color: var(--success); }
+        
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>⚡ Football AI Pro</h1>
-        <p id="update-time">Loading database...</p>
+        <div>
+            <h1>⚡ Command Center</h1>
+            <p id="update-time">Syncing...</p>
+        </div>
+        <div class="sniper-toggle" id="sniperBtn" onclick="toggleSniper()">
+            <span>🛡️ SNIPER</span>
+            <span id="sniper-status">OFF</span>
+        </div>
     </div>
-    <div id="app"><div class="loading">Fetching all leagues...</div></div>
+    <div id="app"></div>
 
     <script>
-        fetch('predictions.json').then(r => r.json()).then(data => {
-            const app = document.getElementById('app');
-            document.getElementById('update-time').innerText = `Updated: ${data.generated.replace('T', ' ')}`;
-            
-            if (!data.matches || data.matches.length === 0) {
-                app.innerHTML = '<div class="loading">No matches available.</div>';
-                return;
-            }
+        let allMatches = [];
+        let sniperMode = false;
+        const SNIPER_THRESHOLD = 0.70; // 70%
 
-            app.innerHTML = '';
+        fetch('predictions.json').then(r => r.json()).then(data => {
+            document.getElementById('update-time').innerText = `Updated: ${data.generated.replace('T', ' ')}`;
+            allMatches = data.matches || [];
+            render();
+        }).catch(e => {
+            document.getElementById('app').innerHTML = '<div style="text-align:center; padding:20px;">⚠️ Error loading predictions.</div>';
+        });
+
+        function toggleSniper() {
+            sniperMode = !sniperMode;
+            const btn = document.getElementById('sniperBtn');
+            const status = document.getElementById('sniper-status');
+            if (sniperMode) {
+                btn.classList.add('active');
+                status.innerText = 'ON';
+            } else {
+                btn.classList.remove('active');
+                status.innerText = 'OFF';
+            }
+            render();
+        }
+
+        function getPrimaryPick(match) {
+            // Finds the highest goal probability in the match
+            let best = { name: '', prob: 0, cat: '' };
+            const targets = ['Total Goals', 'Team Goals', 'BTTS'];
             
-            data.matches.forEach((match, index) => {
-                // Find the best bet for the summary card
-                let bestProb = 0;
-                let bestBetName = "";
-                const teamGoals = match.markets["Team Goals"] || {};
-                const totalGoals = match.markets["Total Goals"] || {};
+            targets.forEach(cat => {
+                if (match.markets[cat]) {
+                    for (const [name, prob] of Object.entries(match.markets[cat])) {
+                        // We only care about Over/Yes markets for the primary pick
+                        if (name.includes('Over') || name.includes('Yes')) {
+                            if (prob > best.prob) {
+                                best = { name: name, prob: prob, cat: cat };
+                            }
+                        }
+                    }
+                }
+            });
+            return best;
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            app.innerHTML = '';
+
+            // 1. Group matches by Date
+            const grouped = {};
+            allMatches.forEach(m => {
+                if (!grouped[m.date]) grouped[m.date] = [];
+                grouped[m.date].push(m);
+            });
+
+            const sortedDates = Object.keys(grouped).sort();
+
+            let hasRendered = false;
+
+            sortedDates.forEach(date => {
+                const dateDiv = document.createElement('div');
+                dateDiv.className = 'date-group';
                 
-                Object.entries({...teamGoals, ...totalGoals}).forEach(([k, v]) => {
-                    if (v > bestProb) { bestProb = v; bestBetName = k; }
+                // Format Date Title (Today / Tomorrow / Date)
+                const today = new Date().toISOString().split('T')[0];
+                const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                let dateLabel = date;
+                if (date === today) dateLabel = "TODAY";
+                else if (date === tomorrow) dateLabel = "TOMORROW";
+                else {
+                    const d = new Date(date);
+                    dateLabel = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' }).toUpperCase();
+                }
+
+                let dateHTML = `<div class="date-title">${dateLabel}</div>`;
+
+                // 2. Group by League within this date
+                const leaguesInDate = {};
+                grouped[date].forEach(m => {
+                    if (!leaguesInDate[m.league]) leaguesInDate[m.league] = [];
+                    leaguesInDate[m.league].push(m);
                 });
 
-                const card = document.createElement('div');
-                card.className = 'match-card';
-                
-                let detailsHTML = `
-                    <div class="xg-box">
-                        <div><div>${match.home} xG</div><div class="xg-val">${match.xg_home}</div></div>
-                        <div><div>${match.away} xG</div><div class="xg-val">${match.xg_away}</div></div>
-                    </div>
-                `;
+                let leagueHTML = '';
+                const sortedLeagues = Object.keys(leaguesInDate).sort();
 
-                // Helper to build market grids
-                const buildGrid = (marketsObj, title) => {
-                    if (!marketsObj) return '';
-                    let html = `<div class="section-title">${title}</div><div class="market-grid">`;
-                    for (const [name, prob] of Object.entries(marketsObj)) {
-                        const probPct = (prob * 100).toFixed(1);
-                        const probClass = prob >= 0.80 ? 'high' : '';
-                        html += `
-                            <div class="market-item">
-                                <div class="market-name">${name}</div>
-                                <div class="market-prob ${probClass}">${probPct}%</div>
-                                <div class="odds-input">
-                                    <input type="number" step="0.01" placeholder="Odds" oninput="checkValue(this, ${prob})">
-                                </div>
-                                <div class="val-badge">-</div>
+                sortedLeagues.forEach(league => {
+                    let matchesHTML = '';
+                    
+                    leaguesInDate[league].forEach(match => {
+                        const topPick = getPrimaryPick(match);
+                        
+                        // SNIPER FILTER LOGIC
+                        if (sniperMode && topPick.prob < SNIPER_THRESHOLD) return;
+
+                        hasRendered = true;
+                        matchesHTML += buildCardHTML(match, topPick);
+                    });
+
+                    if (matchesHTML !== '') {
+                        leagueHTML += `
+                            <div class="league-group">
+                                <div class="league-title">${league}</div>
+                                ${matchesHTML}
                             </div>
                         `;
                     }
-                    return html + '</div>';
-                };
+                });
 
-                detailsHTML += buildGrid(match.markets["Team Goals"], "Team Goals");
-                detailsHTML += buildGrid(match.markets["Total Goals"], "Total Goals");
-                detailsHTML += buildGrid(match.markets["Result"], "Match Result");
-                detailsHTML += buildGrid(match.markets["BTTS"], "Both Teams to Score");
-                detailsHTML += buildGrid(match.markets["Correct Score"], "Top Correct Scores");
+                if (leagueHTML !== '') {
+                    dateDiv.innerHTML = dateHTML + leagueHTML;
+                    app.appendChild(dateDiv);
+                }
+            });
 
-                card.innerHTML = `
-                    <div class="match-header" onclick="this.parentElement.classList.toggle('expanded')">
-                        <div class="match-info">
-                            <div class="meta">${match.league} &bull; ${match.date} ${match.time}</div>
-                            <h3>${match.home} vs ${match.away}</h3>
+            if (!hasRendered) {
+                app.innerHTML = '<div style="text-align:center; padding: 40px 20px; color: var(--muted);"><h3>No matches meet the strict criteria.</h3><p>Protect your bankroll today.</p></div>';
+            }
+        }
+
+        function buildCardHTML(match, topPick) {
+            // Deep stats formatting
+            const fh = match.form_home || { fts: 0, cs: 0, btts: 0 };
+            const fa = match.form_away || { fts: 0, cs: 0, btts: 0 };
+            
+            let statsHTML = `
+                <div class="deep-stats">
+                    <div class="stat-col">
+                        <div style="font-weight:bold; color:var(--text); margin-bottom:4px;">${match.home}</div>
+                        <div class="stat-row"><span>Failed to Score:</span> <span>${fh.fts}%</span></div>
+                        <div class="stat-row"><span>Clean Sheets:</span> <span>${fh.cs}%</span></div>
+                        <div class="stat-row"><span>BTTS (Last 5):</span> <span>${fh.btts}%</span></div>
+                    </div>
+                    <div class="stat-col">
+                        <div style="font-weight:bold; color:var(--text); margin-bottom:4px;">${match.away}</div>
+                        <div class="stat-row"><span>Failed to Score:</span> <span>${fa.fts}%</span></div>
+                        <div class="stat-row"><span>Clean Sheets:</span> <span>${fa.cs}%</span></div>
+                        <div class="stat-row"><span>BTTS (Last 5):</span> <span>${fa.btts}%</span></div>
+                    </div>
+                </div>
+            `;
+
+            // Build full goal market grid for expanded view
+            let marketsHTML = '';
+            const buildGrid = (catName) => {
+                if (!match.markets[catName]) return '';
+                let html = `<div class="section-title">${catName}</div><div class="market-grid">`;
+                for (const [name, prob] of Object.entries(match.markets[catName])) {
+                    const probPct = (prob * 100).toFixed(1);
+                    const probClass = prob >= 0.75 ? 'high' : '';
+                    html += `
+                        <div class="market-item">
+                            <div class="market-name">${name}</div>
+                            <div class="market-prob ${probClass}">${probPct}%</div>
                         </div>
-                        <div class="best-bet-badge">
-                            Top Option
-                            <span>${bestBetName.replace(match.home, 'H').replace(match.away, 'A')}</span>
-                            ${(bestProb * 100).toFixed(0)}%
+                    `;
+                }
+                return html + '</div>';
+            };
+
+            marketsHTML += buildGrid('Total Goals');
+            marketsHTML += buildGrid('Team Goals');
+            marketsHTML += buildGrid('BTTS');
+
+            // Determine color for top pick
+            const pickColorClass = topPick.prob >= 0.75 ? 'high' : '';
+
+            return `
+                <div class="match-card" id="card-${match.home.replace(/\\s/g, '')}-${match.away.replace(/\\s/g, '')}">
+                    <div class="card-main" onclick="toggleCard(this)">
+                        <div class="teams-row">
+                            <div class="team-name">${match.home}</div>
+                            <div class="vs">VS</div>
+                            <div class="team-name away">${match.away}</div>
+                        </div>
+                        <div class="xg-row">
+                            <div>xG <span class="xg-val">${match.xg_home}</span></div>
+                            <div>${match.time}</div>
+                            <div>xG <span class="xg-val">${match.xg_away}</span></div>
+                        </div>
+                        
+                        <div class="primary-pick">
+                            <div class="pick-info">
+                                <span class="pick-label">Top Goal Market</span>
+                                <span class="pick-name">${topPick.name}</span>
+                                <span class="pick-prob ${pickColorClass}">${(topPick.prob * 100).toFixed(1)}% Probability</span>
+                            </div>
+                            <div class="odds-input-box">
+                                <input type="number" step="0.01" placeholder="Odds" onclick="event.stopPropagation()" oninput="checkValue(this, ${topPick.prob}, this.closest('.match-card'))">
+                                <div class="val-badge">-</div>
+                            </div>
                         </div>
                     </div>
                     <div class="details">
-                        ${detailsHTML}
+                        ${statsHTML}
+                        ${marketsHTML}
                     </div>
-                `;
-                app.appendChild(card);
-            });
-        }).catch(e => {
-            document.getElementById('app').innerHTML = '<div class="loading">⚠️ Error loading database.</div>';
-        });
+                </div>
+            `;
+        }
 
-        function checkValue(input, prob) {
+        function toggleCard(element) {
+            element.parentElement.classList.toggle('expanded');
+        }
+
+        function checkValue(input, prob, cardElement) {
             const odds = parseFloat(input.value);
-            const badge = input.parentElement.nextElementSibling;
+            const badge = input.nextElementSibling;
+            
             if (odds > 1.01) {
                 const implied = 1 / odds;
-                if (prob > implied) {
-                    badge.innerText = `VALUE +${((prob - implied) * 100).toFixed(1)}%`;
+                const edge = (prob - implied) * 100;
+                
+                if (edge > 0) {
+                    badge.innerText = `VALUE +${edge.toFixed(1)}%`;
                     badge.className = 'val-badge show val-good';
+                    cardElement.classList.add('value-found');
                 } else {
                     badge.innerText = `NO VALUE`;
                     badge.className = 'val-badge show val-bad';
+                    cardElement.classList.remove('value-found');
                 }
             } else {
                 badge.className = 'val-badge';
+                cardElement.classList.remove('value-found');
             }
         }
     </script>
