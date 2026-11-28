@@ -4,8 +4,15 @@ import pandas as pd
 from scipy.optimize import minimize
 from scipy.stats import poisson
 
-LEAGUES = {"E0": "Premier League", "E1": "Championship", "SP1": "La Liga", "I1": "Serie A", "D1": "Bundesliga", "F1": "Ligue 1", "N1": "Eredivisie", "P1": "Primeira Liga"}
-ACTIVE = ["E0", "E1", "SP1", "I1", "D1", "F1", "N1", "P1"]
+# --- THE 10 LEAGUES ---
+LEAGUES = {
+    "E0": "Premier League", "E1": "Championship", "E2": "League One",
+    "SP1": "La Liga", "D1": "Bundesliga", "D2": "2. Bundesliga",
+    "N1": "Eredivisie", "B1": "Belgian Pro League", 
+    "T1": "Turkish Super Lig", "SC0": "Scottish Premiership"
+}
+ACTIVE = ["E0", "E1", "E2", "SP1", "D1", "D2", "N1", "B1", "T1", "SC0"]
+
 SEASONS_BACK = 4; XI = 0.0019; SHRINK = 2.0; MAX_GOALS = 10
 XG_WEIGHT = 0.5; CONVERSION_RATE = 0.33
 FOOTBALL_DATA_API_KEY = "2a67295f23384b56829c9b228e10b369"
@@ -73,13 +80,13 @@ def load_results(code, force=False):
     return out
 
 def clean_name(name):
-    # Strips common suffixes so "FC Barcelona" matches "Barcelona"
-    for suffix in [" FC", " AFC", " CF", " AC", " SC", " SV", " 04"]:
+    for suffix in [" FC", " AFC", " CF", " AC", " SC", " SV", " 04", "1900", "1901", "1907", "1909", "1913", " 07", " 29", " 65"]:
         name = name.replace(suffix, "")
     return name.strip()
 
 def load_fixtures(force=False):
-    api_codes = {"E0": "PL", "E1": "ELC", "SP1": "PD", "SP2": "SD", "I1": "SA", "D1": "BL1", "F1": "FL1", "N1": "DED", "P1": "PPL"}
+    # Updated API codes for the 10 leagues (Free tier might block E2, D2, SC0)
+    api_codes = {"E0": "PL", "E1": "ELC", "E2": "EL1", "SP1": "PD", "D1": "BL1", "D2": "BL2", "N1": "DED", "B1": "BSA", "T1": "TSL", "SC0": "SPL"}
     today_str = TODAY.strftime('%Y-%m-%d')
     end_date_str = (TODAY + pd.Timedelta(days=7)).strftime('%Y-%m-%d')
     all_matches = []
@@ -97,13 +104,41 @@ def load_fixtures(force=False):
                 match_time = match_date.strftime('%H:%M')
                 h_name = clean_name(m['homeTeam']['name'])
                 a_name = clean_name(m['awayTeam']['name'])
-                all_matches.append({"Div": league_code, "Date": match_date, "Time": match_time, "HomeTeam": h_name, "AwayTeam": a_name})
+                all_matches.append({
+                    "Div": league_code, "Date": match_date, "Time": match_time, 
+                    "HomeTeam": h_name, "AwayTeam": a_name
+                })
         except Exception as e: print(f"API Error {comp_code}: {e}")
+        time.sleep(6) # Prevent API Ban
 
     if not all_matches: return None
     df = pd.DataFrame(all_matches)
     df["Date"] = pd.to_datetime(df["Date"])
     return df.sort_values(["Date", "Time"]).reset_index(drop=True)
+
+def get_team_form(df, team, n=5):
+    """Calculates deep form stats (FTS, CS, BTTS) over the last N games"""
+    # Filter matches where the team played
+    team_df = df[(df['HomeTeam'] == team) | (df['AwayTeam'] == team)].copy()
+    team_df = team_df.sort_values('Date', ascending=False).head(n)
+    
+    if len(team_df) == 0: return {"fts": 0, "cs": 0, "btts": 0}
+    
+    fts, cs, btts = 0, 0, 0
+    for _, row in team_df.iterrows():
+        is_home = row['HomeTeam'] == team
+        scored = row['FTHG'] if is_home else row['FTAG']
+        conceded = row['FTAG'] if is_home else row['FTHG']
+        
+        if scored == 0: fts += 1
+        if conceded == 0: cs += 1
+        if scored > 0 and conceded > 0: btts += 1
+        
+    return {
+        "fts": round((fts / len(team_df)) * 100, 1),
+        "cs": round((cs / len(team_df)) * 100, 1),
+        "btts": round((btts / len(team_df)) * 100, 1)
+    }
 
 def fit_league(df):
     teams = sorted(set(df.HomeTeam) | set(df.AwayTeam))
@@ -131,7 +166,11 @@ def fit_league(df):
     bounds = [(-3, 3)] * (2 * n) + [(-1, 1.5), (-1, 1), (-0.3, 0.3)]
     res = minimize(nll, x0, method="L-BFGS-B", bounds=bounds, options={"maxiter": 500})
     p = res.x
-    return {"teams": teams, "idx": idx, "att": p[:n] - p[:n].mean(), "dfn": p[n:2 * n] - p[n:2 * n].mean(), "c0": p[2 * n], "gam": p[2 * n + 1], "rho": p[2 * n + 2], "n_matches": len(df)}
+    
+    # Calculate form for all teams in this league
+    form_data = {team: get_team_form(df, team) for team in teams}
+    
+    return {"teams": teams, "idx": idx, "att": p[:n] - p[:n].mean(), "dfn": p[n:2 * n] - p[n:2 * n].mean(), "c0": p[2 * n], "gam": p[2 * n + 1], "rho": p[2 * n + 2], "n_matches": len(df), "form": form_data}
 
 def analyse(model, home, away):
     i, j = model["idx"][home], model["idx"][away]
@@ -153,11 +192,18 @@ def analyse(model, home, away):
     S["BTTS"] = {"Yes": P[(H > 0) & (A > 0)].sum(), "No": P[(H == 0) | (A == 0)].sum()}
     flat = sorted(((P[i, j], f"{i}-{j}") for i in range(4) for j in range(4)), reverse=True)[:4]
     S["Correct Score"] = {lab: p for p, lab in flat}
-    return {"home": home, "away": away, "xg_h": float(lam), "xg_a": float(mu), "sections": {t: {l: float(v) for l, v in d.items()} for t, d in S.items()}}
+    
+    return {
+        "home": home, "away": away, "xg_h": float(lam), "xg_a": float(mu), 
+        "sections": {t: {l: float(v) for l, v in d.items()} for t, d in S.items()},
+        "form_h": model["form"].get(home, {}),
+        "form_a": model["form"].get(away, {})
+    }
 
 def build_all(force=False):
     models = {}
     for code in ACTIVE:
+        print(f"Loading {LEAGUES.get(code, code)}...")
         df = load_results(code, force)
         if df is None or len(df) < 100: continue
         models[code] = fit_league(df)
